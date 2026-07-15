@@ -14,6 +14,7 @@ fail() {
 [ -n "${TRIM_PKGETC:-}" ] || fail "安装失败：系统未提供 TRIM_PKGETC。"
 [ -n "${TRIM_PKGVAR:-}" ] || fail "安装失败：系统未提供 TRIM_PKGVAR。"
 [ -f "${TRIM_APPDEST}/branding/settings.yml" ] || fail "安装失败：应用配置模板未正确安装。"
+[ -f "${TRIM_APPDEST}/branding/default-engines.yml" ] || fail "安装失败：默认引擎配置未正确安装。"
 
 mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs" || fail "安装失败：无法创建应用配置或数据目录。"
 chmod 755 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
@@ -26,13 +27,17 @@ if [ ! -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
   mv "${temporary_settings}" "${TRIM_PKGETC}/searxng/settings.yml"
 fi
 
+if grep -Eq '^[[:space:]]+favicon_resolver:[[:space:]]*"?duckduckgo"?[[:space:]]*$' "${TRIM_PKGETC}/searxng/settings.yml"; then
+  sed -i 's/^[[:space:]]*favicon_resolver:.*$/  favicon_resolver: "google"/' "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
 if ! grep -Eq '^[[:space:]]+favicon_resolver:' "${TRIM_PKGETC}/searxng/settings.yml"; then
-  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.favicon.$$"
+  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.search.$$"
   awk '
     BEGIN { inserted = 0 }
     /^search:[[:space:]]*$/ && inserted == 0 {
       print
-      print "  favicon_resolver: \"duckduckgo\""
+      print "  favicon_resolver: \"google\""
       inserted = 1
       next
     }
@@ -41,12 +46,27 @@ if ! grep -Eq '^[[:space:]]+favicon_resolver:' "${TRIM_PKGETC}/searxng/settings.
       if (inserted == 0) {
         print ""
         print "search:"
-        print "  favicon_resolver: \"duckduckgo\""
+        print "  favicon_resolver: \"google\""
       }
     }
   ' "${TRIM_PKGETC}/searxng/settings.yml" > "${temporary_settings}"
   chmod 644 "${temporary_settings}"
   mv "${temporary_settings}" "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
+if grep -Eq '^[[:space:]]+autocomplete:[[:space:]]*(""|'"'"''"'"')[[:space:]]*$' "${TRIM_PKGETC}/searxng/settings.yml"; then
+  sed -i 's/^[[:space:]]*autocomplete:.*$/  autocomplete: "bing"/' "${TRIM_PKGETC}/searxng/settings.yml"
+elif ! grep -Eq '^[[:space:]]+autocomplete:' "${TRIM_PKGETC}/searxng/settings.yml"; then
+  sed -i '/^search:[[:space:]]*$/a\  autocomplete: "bing"' "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
+if ! grep -Eq '^[[:space:]]+autocomplete_min:' "${TRIM_PKGETC}/searxng/settings.yml"; then
+  sed -i '/^[[:space:]]*autocomplete:/a\  autocomplete_min: 4' "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
+if ! grep -Eq '^engines:[[:space:]]*$' "${TRIM_PKGETC}/searxng/settings.yml"; then
+  printf '\n' >> "${TRIM_PKGETC}/searxng/settings.yml"
+  cat "${TRIM_APPDEST}/branding/default-engines.yml" >> "${TRIM_PKGETC}/searxng/settings.yml"
 fi
 
 for asset in searxng.png favicon.png 192.png 512.png searxng-wordmark.svg; do

@@ -22,6 +22,8 @@ type Config struct {
 	GatewayPrefix string
 	ServicePort   int
 	Version       string
+	SettingsPath  string
+	BrandingDir   string
 }
 
 type Handler struct {
@@ -29,6 +31,8 @@ type Handler struct {
 	gatewayPrefix string
 	servicePort   int
 	version       string
+	settingsPath  string
+	brandingDir   string
 }
 
 type statusResponse struct {
@@ -60,12 +64,22 @@ func New(config Config) (http.Handler, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("web root is not a directory: %s", root)
 	}
+	settingsPath, err := filepath.Abs(config.SettingsPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve settings path: %w", err)
+	}
+	brandingDir, err := filepath.Abs(config.BrandingDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve branding directory: %w", err)
+	}
 
 	return &Handler{
 		webRoot:       root,
 		gatewayPrefix: prefix,
 		servicePort:   config.ServicePort,
 		version:       config.Version,
+		settingsPath:  settingsPath,
+		brandingDir:   brandingDir,
 	}, nil
 }
 
@@ -92,16 +106,25 @@ func (handler *Handler) serveAPI(response http.ResponseWriter, request *http.Req
 		writeJSON(response, http.StatusForbidden, map[string]string{"error": "administrator access required"})
 		return
 	}
-	if relativePath != "/api/status" {
+	switch {
+	case relativePath == "/api/status":
+		handler.serveStatus(response, request)
+	case relativePath == "/api/config":
+		handler.serveConfig(response, request)
+	case relativePath == "/api/config/raw":
+		handler.serveRawConfig(response, request)
+	case strings.HasPrefix(relativePath, "/api/branding/"):
+		handler.serveBranding(response, request, strings.TrimPrefix(relativePath, "/api/branding/"))
+	default:
 		http.NotFound(response, request)
-		return
 	}
-	if request.Method != http.MethodGet {
-		response.Header().Set("Allow", http.MethodGet)
-		writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
+}
 
+func (handler *Handler) serveStatus(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		methodNotAllowed(response, http.MethodGet)
+		return
+	}
 	writeJSON(response, http.StatusOK, statusResponse{
 		Status:     "ok",
 		Version:    handler.version,
@@ -207,6 +230,11 @@ func writeJSON(response http.ResponseWriter, status int, value any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	response.WriteHeader(status)
 	_ = json.NewEncoder(response).Encode(value)
+}
+
+func methodNotAllowed(response http.ResponseWriter, methods ...string) {
+	response.Header().Set("Allow", strings.Join(methods, ", "))
+	writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 }
 
 func normalizePrefix(prefix string) (string, error) {

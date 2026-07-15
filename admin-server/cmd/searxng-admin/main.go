@@ -17,13 +17,15 @@ import (
 	"searxng-admin/internal/server"
 )
 
-const version = "0.1.4"
+const version = "0.2.0"
 
 type options struct {
 	socketPath    string
 	webRoot       string
 	gatewayPrefix string
 	servicePort   int
+	settingsPath  string
+	brandingDir   string
 }
 
 func main() {
@@ -73,6 +75,8 @@ func run(args []string, logger *log.Logger) error {
 		GatewayPrefix: options.gatewayPrefix,
 		ServicePort:   options.servicePort,
 		Version:       version,
+		SettingsPath:  options.settingsPath,
+		BrandingDir:   options.brandingDir,
 	})
 	if err != nil {
 		return err
@@ -124,6 +128,8 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&result.webRoot, "web-root", "./web", "static SPA root")
 	flags.StringVar(&result.gatewayPrefix, "gateway-prefix", "/app/searxng-admin", "full gateway route prefix")
 	flags.IntVar(&result.servicePort, "service-port", 8080, "SearXNG service port")
+	flags.StringVar(&result.settingsPath, "settings", "/config/settings.yml", "SearXNG settings.yml path")
+	flags.StringVar(&result.brandingDir, "branding-dir", "/config/branding", "branding asset directory")
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
 	}
@@ -135,6 +141,12 @@ func parseOptions(args []string) (options, error) {
 	}
 	if result.servicePort < 1 || result.servicePort > 65535 {
 		return options{}, fmt.Errorf("service port must be between 1 and 65535")
+	}
+	if result.settingsPath == "" {
+		return options{}, errors.New("settings path must not be empty")
+	}
+	if result.brandingDir == "" {
+		return options{}, errors.New("branding directory must not be empty")
 	}
 	return result, nil
 }

@@ -40,6 +40,10 @@ services:
       - /app/searxng-admin
       - --service-port
       - "${TRIM_SERVICE_PORT}"
+      - --settings
+      - /config/settings.yml
+      - --branding-dir
+      - /config/branding
     volumes:
       - "${TRIM_APPDEST}:/app:rw"
       - "${TRIM_PKGETC}/searxng:/config:rw"

@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,20 +112,250 @@ func TestStaticPathTraversalIsRejected(t *testing.T) {
 	}
 }
 
+func TestAllAPIEndpointsRequireAdministrator(t *testing.T) {
+	handler, _, _ := newTestEnvironment(t, "/app/searxng-admin")
+	tests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodGet, "/api/config", ""},
+		{http.MethodPut, "/api/config", `{}`},
+		{http.MethodGet, "/api/config/raw", ""},
+		{http.MethodPut, "/api/config/raw", `{}`},
+		{http.MethodPost, "/api/branding/logo", "invalid"},
+	}
+	for _, test := range tests {
+		request := httptest.NewRequest(test.method, "http://nas.example/app/searxng-admin"+test.path, strings.NewReader(test.body))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("%s %s status = %d, want %d", test.method, test.path, response.Code, http.StatusForbidden)
+		}
+	}
+}
+
+func TestGetAndPutConfigPreservesSecretAndUnknownFields(t *testing.T) {
+	handler, settingsPath, _ := newTestEnvironment(t, "/app/searxng-admin")
+	current := getTestConfig(t, handler)
+	if current.Config.Brand.InstanceName != "Original" || current.Config.Search.Autocomplete != "baidu" {
+		t.Fatalf("unexpected config: %+v", current.Config)
+	}
+	if len(current.Config.Engines) != len(managedEngines) {
+		t.Fatalf("engines = %d, want %d", len(current.Config.Engines), len(managedEngines))
+	}
+	chinaso := findEngine(t, current.Config.Engines, "chinaso news")
+	if chinaso.Enabled || !chinaso.Locked || chinaso.Warning == "" {
+		t.Fatalf("unexpected chinaso config: %+v", chinaso)
+	}
+
+	current.Config.Brand.InstanceName = "Updated"
+	current.Config.Brand.BaseURL = ""
+	current.Config.Brand.PrivacyPolicyURL = ""
+	current.Config.Brand.DonationURL = ""
+	current.Config.Brand.ContactURL = ""
+	current.Config.Brand.DocsURL = ""
+	current.Config.Brand.PublicInstancesURL = ""
+	current.Config.Brand.WikiURL = ""
+	current.Config.Brand.IssueURL = ""
+	current.Config.Search.SafeSearch = 2
+	current.Config.Outgoing.ProxyURL = "socks5h://127.0.0.1:9050"
+	findEnginePointer(t, current.Config.Engines, "baidu").Enabled = true
+	findEnginePointer(t, current.Config.Engines, "chinaso news").Enabled = true
+	body, err := json.Marshal(putConfigRequest{Revision: current.Revision, Config: current.Config})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	response := performAdminRequest(handler, http.MethodPut, "/api/config", body, "application/json")
+	if response.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var saved saveResponse
+	if err := json.NewDecoder(response.Body).Decode(&saved); err != nil {
+		t.Fatalf("decode save response: %v", err)
+	}
+	if !saved.Saved || !saved.RestartRequired || len(saved.Warnings) != 1 {
+		t.Fatalf("unexpected save response: %+v", saved)
+	}
+
+	_, document, err := readYAMLDocument(settingsPath)
+	if err != nil {
+		t.Fatalf("read updated yaml: %v", err)
+	}
+	if got := scalarString(lookupPath(document, "server", "secret_key"), ""); got != "keep-me" {
+		t.Fatalf("secret_key = %q", got)
+	}
+	if got := scalarString(lookupPath(document, "custom", "untouched"), ""); got != "preserved" {
+		t.Fatalf("unknown field = %q", got)
+	}
+	for _, path := range [][]string{
+		{"server", "base_url"},
+		{"general", "privacypolicy_url"},
+		{"general", "donation_url"},
+		{"general", "contact_url"},
+		{"brand", "docs_url"},
+		{"brand", "public_instances"},
+		{"brand", "wiki_url"},
+		{"brand", "issue_url"},
+	} {
+		if node := lookupPath(document, path...); node != nil {
+			t.Fatalf("empty optional setting %v should be removed, got tag=%s value=%q", path, node.Tag, node.Value)
+		}
+	}
+	if engineDisabled(document, "baidu") {
+		t.Fatal("baidu should be enabled")
+	}
+	if !engineDisabled(document, "chinaso news") {
+		t.Fatal("chinaso must remain disabled")
+	}
+	backup, err := os.ReadFile(settingsPath + ".bak")
+	if err != nil || !bytes.Contains(backup, []byte("instance_name: Original")) {
+		t.Fatalf("backup missing original settings: %v", err)
+	}
+}
+
+func TestPutConfigRejectsRevisionConflict(t *testing.T) {
+	handler, _, _ := newTestEnvironment(t, "/app/searxng-admin")
+	current := getTestConfig(t, handler)
+	body, _ := json.Marshal(putConfigRequest{Revision: "stale", Config: current.Config})
+	response := performAdminRequest(handler, http.MethodPut, "/api/config", body, "application/json")
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusConflict)
+	}
+}
+
+func TestRawConfigImportPreservesCurrentSecret(t *testing.T) {
+	handler, settingsPath, _ := newTestEnvironment(t, "/app/searxng-admin")
+	input := rawConfigRequest{YAML: "server:\n  secret_key: imported-secret\n  base_url: https://new.example/\ncustom:\n  imported: true\n"}
+	body, _ := json.Marshal(input)
+	response := performAdminRequest(handler, http.MethodPut, "/api/config/raw", body, "application/json")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	_, document, err := readYAMLDocument(settingsPath)
+	if err != nil {
+		t.Fatalf("read imported yaml: %v", err)
+	}
+	if got := scalarString(lookupPath(document, "server", "secret_key"), ""); got != "keep-me" {
+		t.Fatalf("secret_key = %q", got)
+	}
+	if !scalarBool(lookupPath(document, "custom", "imported"), false) {
+		t.Fatal("imported field not saved")
+	}
+
+	download := performAdminRequest(handler, http.MethodGet, "/api/config/raw", nil, "")
+	if download.Code != http.StatusOK || !strings.Contains(download.Header().Get("Content-Disposition"), "settings.yml") {
+		t.Fatalf("raw download failed: status=%d headers=%v", download.Code, download.Header())
+	}
+}
+
+func TestBrandingUploadValidation(t *testing.T) {
+	handler, _, brandingDir := newTestEnvironment(t, "/app/searxng-admin")
+	png := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, []byte("payload")...)
+	validPNG := performAdminRequest(handler, http.MethodPost, "/api/branding/logo", png, "image/png")
+	if validPNG.Code != http.StatusOK {
+		t.Fatalf("PNG status = %d, body = %s", validPNG.Code, validPNG.Body.String())
+	}
+	if data, err := os.ReadFile(filepath.Join(brandingDir, "searxng.png")); err != nil || !bytes.Equal(data, png) {
+		t.Fatalf("saved PNG mismatch: %v", err)
+	}
+	invalidPNG := performAdminRequest(handler, http.MethodPost, "/api/branding/favicon", []byte("not png"), "image/png")
+	if invalidPNG.Code != http.StatusBadRequest {
+		t.Fatalf("invalid PNG status = %d", invalidPNG.Code)
+	}
+	validSVG := performAdminRequest(handler, http.MethodPost, "/api/branding/wordmark", []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), "image/svg+xml")
+	if validSVG.Code != http.StatusOK {
+		t.Fatalf("SVG status = %d, body = %s", validSVG.Code, validSVG.Body.String())
+	}
+	wrongSVG := performAdminRequest(handler, http.MethodPost, "/api/branding/wordmark", []byte(`<html></html>`), "image/svg+xml")
+	if wrongSVG.Code != http.StatusBadRequest {
+		t.Fatalf("invalid SVG status = %d", wrongSVG.Code)
+	}
+}
+
 func newTestHandler(t *testing.T, prefix string) http.Handler {
+	t.Helper()
+	handler, _, _ := newTestEnvironment(t, prefix)
+	return handler
+}
+
+func newTestEnvironment(t *testing.T, prefix string) (http.Handler, string, string) {
 	t.Helper()
 	webRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(webRoot, "index.html"), []byte("<html>SPA</html>"), 0o600); err != nil {
 		t.Fatalf("write index: %v", err)
 	}
+	configDir := t.TempDir()
+	settingsPath := filepath.Join(configDir, "settings.yml")
+	if err := os.WriteFile(settingsPath, []byte(testSettingsYAML()), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+	brandingDir := filepath.Join(configDir, "branding")
 	handler, err := New(Config{
 		WebRoot:       webRoot,
 		GatewayPrefix: prefix,
 		ServicePort:   8888,
 		Version:       "test-version",
+		SettingsPath:  settingsPath,
+		BrandingDir:   brandingDir,
 	})
 	if err != nil {
 		t.Fatalf("create handler: %v", err)
 	}
-	return handler
+	return handler, settingsPath, brandingDir
+}
+
+func testSettingsYAML() string {
+	var builder strings.Builder
+	builder.WriteString("general:\n  instance_name: Original\n  privacypolicy_url: false\n  donation_url: false\n  contact_url: mailto:admin@example.com\n")
+	builder.WriteString("brand:\n  docs_url: https://docs.example.com/\n  public_instances: https://instances.example.com/\n  wiki_url: https://wiki.example.com/\n  issue_url: https://issues.example.com/\n")
+	builder.WriteString("search:\n  safe_search: 1\n  autocomplete: baidu\n  autocomplete_min: 4\n  favicon_resolver: duckduckgo\n  default_lang: auto\n  max_page: 0\n")
+	builder.WriteString("server:\n  secret_key: keep-me\n  base_url: https://search.example.com/\n  limiter: true\n")
+	builder.WriteString("ui:\n  default_theme: simple\n  default_locale: ''\n  theme_args:\n    simple_style: auto\n  query_in_title: false\n  center_alignment: false\n  results_on_new_tab: false\n  search_on_category_select: true\n  hotkeys: default\n  url_formatting: pretty\n")
+	builder.WriteString("outgoing:\n  request_timeout: 3.0\n  max_request_timeout: 10.0\n  pool_connections: 100\n  pool_maxsize: 20\n  enable_http2: true\n  proxies: null\n  using_tor_proxy: false\n  extra_proxy_timeout: 0\n")
+	builder.WriteString("custom:\n  untouched: preserved\nengines:\n")
+	for _, engine := range managedEngines {
+		builder.WriteString(fmt.Sprintf("  - name: %s\n    disabled: true\n", engine.Name))
+	}
+	return builder.String()
+}
+
+func getTestConfig(t *testing.T, handler http.Handler) configResponse {
+	t.Helper()
+	response := performAdminRequest(handler, http.MethodGet, "/api/config", nil, "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET config status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var result configResponse
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	return result
+}
+
+func performAdminRequest(handler http.Handler, method, apiPath string, body []byte, contentType string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, "http://nas.example/app/searxng-admin"+apiPath, bytes.NewReader(body))
+	request.Header.Set(adminHeader, "true")
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
+func findEngine(t *testing.T, engines []engineConfig, name string) engineConfig {
+	t.Helper()
+	return *findEnginePointer(t, engines, name)
+}
+
+func findEnginePointer(t *testing.T, engines []engineConfig, name string) *engineConfig {
+	t.Helper()
+	for index := range engines {
+		if engines[index].Name == name {
+			return &engines[index]
+		}
+	}
+	t.Fatalf("engine %q not found", name)
+	return nil
 }

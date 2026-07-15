@@ -2,13 +2,21 @@
 set -eu
 
 settings_file="${TRIM_PKGETC}/searxng/settings.yml"
-if [ -f "${settings_file}" ] && ! grep -Eq '^[[:space:]]+favicon_resolver:' "${settings_file}"; then
-  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.favicon.$$"
+if [ ! -f "${settings_file}" ]; then
+  exit 0
+fi
+
+if grep -Eq '^[[:space:]]+favicon_resolver:[[:space:]]*"?duckduckgo"?[[:space:]]*$' "${settings_file}"; then
+  sed -i 's/^[[:space:]]*favicon_resolver:.*$/  favicon_resolver: "google"/' "${settings_file}"
+fi
+
+if ! grep -Eq '^[[:space:]]+favicon_resolver:' "${settings_file}"; then
+  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.search.$$"
   awk '
     BEGIN { inserted = 0 }
     /^search:[[:space:]]*$/ && inserted == 0 {
       print
-      print "  favicon_resolver: \"duckduckgo\""
+      print "  favicon_resolver: \"google\""
       inserted = 1
       next
     }
@@ -17,11 +25,26 @@ if [ -f "${settings_file}" ] && ! grep -Eq '^[[:space:]]+favicon_resolver:' "${s
       if (inserted == 0) {
         print ""
         print "search:"
-        print "  favicon_resolver: \"duckduckgo\""
+        print "  favicon_resolver: \"google\""
       }
     }
   ' "${settings_file}" > "${temporary_settings}"
   chmod 644 "${temporary_settings}"
   mv "${temporary_settings}" "${settings_file}"
+fi
+
+if grep -Eq '^[[:space:]]+autocomplete:[[:space:]]*(""|'"'"''"'"')[[:space:]]*$' "${settings_file}"; then
+  sed -i 's/^[[:space:]]*autocomplete:.*$/  autocomplete: "bing"/' "${settings_file}"
+elif ! grep -Eq '^[[:space:]]+autocomplete:' "${settings_file}"; then
+  sed -i '/^search:[[:space:]]*$/a\  autocomplete: "bing"' "${settings_file}"
+fi
+
+if ! grep -Eq '^[[:space:]]+autocomplete_min:' "${settings_file}"; then
+  sed -i '/^[[:space:]]*autocomplete:/a\  autocomplete_min: 4' "${settings_file}"
+fi
+
+if ! grep -Eq '^engines:[[:space:]]*$' "${settings_file}" && [ -f "${TRIM_APPDEST}/branding/default-engines.yml" ]; then
+  printf '\n' >> "${settings_file}"
+  cat "${TRIM_APPDEST}/branding/default-engines.yml" >> "${settings_file}"
 fi
 exit 0

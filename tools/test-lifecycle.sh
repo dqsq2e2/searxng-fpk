@@ -26,7 +26,11 @@ mkdir -p "${TRIM_PKGETC}" "${TRIM_PKGVAR}"
 
 test -f "${TRIM_PKGETC}/searxng/settings.yml"
 test -f "${TRIM_PKGETC}/searxng/branding/searxng.png"
-grep -q 'favicon_resolver: "duckduckgo"' "${TRIM_PKGETC}/searxng/settings.yml"
+grep -q 'favicon_resolver: "google"' "${TRIM_PKGETC}/searxng/settings.yml"
+grep -q 'autocomplete: "bing"' "${TRIM_PKGETC}/searxng/settings.yml"
+grep -q 'autocomplete_min: 4' "${TRIM_PKGETC}/searxng/settings.yml"
+grep -A1 '^  - name: baidu$' "${TRIM_PKGETC}/searxng/settings.yml" | grep -q 'disabled: false'
+grep -A2 '^  - name: chinaso news$' "${TRIM_PKGETC}/searxng/settings.yml" | grep -q 'inactive: true'
 if grep -q '@SECRET_KEY@' "${TRIM_PKGETC}/searxng/settings.yml"; then
   echo "settings secret placeholder was not replaced" >&2
   exit 1
