@@ -1,0 +1,11 @@
+[
+  {
+    "stepTitle": "卸载 SearXNG",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "卸载前请在 SearXNG 配置界面导出 settings.yml 和品牌资源备份。"
+      }
+    ]
+  }
+]

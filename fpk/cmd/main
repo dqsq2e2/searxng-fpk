@@ -31,7 +31,10 @@ case "${1:-}" in
     rm -f "${pid_file}" "${socket_file}"
     ;;
   status)
-    is_running
+    if is_running; then
+      exit 0
+    fi
+    exit 3
     ;;
   *)
     echo "usage: $0 {start|stop|status}" >&2

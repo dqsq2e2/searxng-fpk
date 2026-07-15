@@ -1,0 +1,11 @@
+[
+  {
+    "stepTitle": "安装 SearXNG",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "SearXNG 搜索服务将通过设备 IP 的 8080 端口访问。安装完成后，请从飞牛桌面打开“SearXNG 配置”管理全局设置。"
+      }
+    ]
+  }
+]

@@ -11,6 +11,15 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test FPK lifecycle
+        run: |
+          chmod +x tools/test-lifecycle.sh fpk/cmd/*
+          ./tools/test-lifecycle.sh
+
   ui:
     runs-on: ubuntu-latest
     steps:
@@ -31,7 +40,7 @@ jobs:
           if-no-files-found: error
 
   fpk:
-    needs: ui
+    needs: [validate, ui]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

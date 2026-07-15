@@ -1,3 +1,34 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
+
+fail() {
+  message="$1"
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    printf '%s\n' "${message}" > "${TRIM_TEMP_LOGFILE}"
+  fi
+  printf '%s\n' "${message}" >&2
+  exit 1
+}
+
+[ -n "${TRIM_APPDEST:-}" ] || fail "安装失败：系统未提供 TRIM_APPDEST。"
+[ -f "${TRIM_APPDEST}/branding/settings.yml" ] || fail "安装失败：应用配置模板未正确安装。"
+
+if [ ! -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
+  secret_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.tmp.$$"
+  sed "s/@SECRET_KEY@/${secret_key}/g" "${TRIM_APPDEST}/branding/settings.yml" > "${temporary_settings}"
+  chmod 644 "${temporary_settings}"
+  mv "${temporary_settings}" "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
+for asset in searxng.png favicon.png 192.png 512.png searxng-wordmark.svg; do
+  source_file="${TRIM_APPDEST}/branding/${asset}"
+  target_file="${TRIM_PKGETC}/searxng/branding/${asset}"
+  [ -f "${source_file}" ] || fail "安装失败：缺少品牌资源 ${asset}。"
+  if [ ! -f "${target_file}" ]; then
+    cp "${source_file}" "${target_file}"
+    chmod 644 "${target_file}"
+  fi
+done
+
 exit 0
