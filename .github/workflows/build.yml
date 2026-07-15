@@ -1,0 +1,103 @@
+name: Build FPK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin-ui/package-lock.json
+      - run: npm ci
+        working-directory: admin-ui
+      - run: npm run build
+        working-directory: admin-ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: admin-ui/dist
+          if-no-files-found: error
+
+  fpk:
+    needs: ui
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch_name: x86
+            platform: x86
+            goarch: amd64
+          - arch_name: arm
+            platform: arm
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache-dependency-path: admin-server/go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: build/admin-ui-dist
+      - name: Download fnpack
+        run: |
+          curl --fail --location --retry 3 \
+            https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64 \
+            --output build/fnpack
+          chmod +x build/fnpack tools/package.sh
+      - name: Test backend
+        run: go test ./...
+        working-directory: admin-server
+      - name: Build backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -trimpath -ldflags="-s -w" -o "../build/searxng-admin-${{ matrix.arch_name }}" ./cmd/searxng-admin
+        working-directory: admin-server
+      - name: Build FPK
+        run: |
+          ./tools/package.sh \
+            "${{ matrix.arch_name }}" \
+            "${{ matrix.platform }}" \
+            "build/searxng-admin-${{ matrix.arch_name }}" \
+            "build/admin-ui-dist" \
+            "$(cat VERSION)" \
+            "$(pwd)/build/fnpack" \
+            "$(pwd)/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: searxng-${{ matrix.arch_name }}-fpk
+          path: dist/*.fpk
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: fpk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: searxng-*-fpk
+          path: release
+          merge-multiple: true
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/*.fpk --generate-notes --title "${GITHUB_REF_NAME}"

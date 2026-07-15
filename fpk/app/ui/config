@@ -1,0 +1,17 @@
+{
+  ".url": {
+    "searxng.admin": {
+      "title": "SearXNG 配置",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/searxng-admin",
+      "gatewaySocket": "admin.sock",
+      "url": "/app/searxng-admin/",
+      "allUsers": false,
+      "control": {
+        "accessPerm": "readonly"
+      }
+    }
+  }
+}

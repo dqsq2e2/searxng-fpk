@@ -1,0 +1,25 @@
+services:
+  searxng:
+    image: searxng/searxng@sha256:1e9c9535cffd1d9d209985905091308257e23b2f4783fbd3b626c0a56285b80c
+    container_name: searxng-fpk
+    restart: unless-stopped
+    ports:
+      - "${TRIM_SERVICE_PORT}:8080"
+    volumes:
+      - "${TRIM_PKGETC}/searxng/settings.yml:/etc/searxng/settings.yml:rw"
+      - "${TRIM_PKGETC}/searxng/branding/searxng-wordmark.svg:/usr/local/searxng/searx/templates/simple/searxng-wordmark.min.svg:ro"
+      - "${TRIM_PKGETC}/searxng/branding/searxng.png:/usr/local/searxng/searx/static/themes/simple/img/searxng.png:ro"
+      - "${TRIM_PKGETC}/searxng/branding/favicon.png:/usr/local/searxng/searx/static/themes/simple/img/favicon.png:ro"
+      - "${TRIM_PKGETC}/searxng/branding/192.png:/usr/local/searxng/searx/static/themes/simple/img/192.png:ro"
+      - "${TRIM_PKGETC}/searxng/branding/512.png:/usr/local/searxng/searx/static/themes/simple/img/512.png:ro"
+      - "${TRIM_PKGVAR}/searxng/cache:/var/cache/searxng:rw"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/searxng/.venv/bin/python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).read()
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

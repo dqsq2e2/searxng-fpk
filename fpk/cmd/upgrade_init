@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+if [ -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
+  mkdir -p "${TRIM_PKGVAR}/backups"
+  cp "${TRIM_PKGETC}/searxng/settings.yml" "${TRIM_PKGVAR}/backups/settings.pre-upgrade.yml"
+fi
+exit 0

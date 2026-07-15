@@ -1,0 +1,10 @@
+admin-ui/node_modules/
+admin-ui/dist/
+build/
+dist/
+*.fpk
+*.exe
+.DS_Store
+Thumbs.db
+admin.sock
+*.log

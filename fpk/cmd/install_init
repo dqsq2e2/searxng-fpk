@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs"
+
+if [ ! -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
+  secret_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  sed "s/@SECRET_KEY@/${secret_key}/g" "${TRIM_APPDEST}/branding/settings.yml" > "${TRIM_PKGETC}/searxng/settings.yml"
+fi
+
+for asset in searxng.png favicon.png 192.png 512.png searxng-wordmark.svg; do
+  if [ ! -f "${TRIM_PKGETC}/searxng/branding/${asset}" ]; then
+    cp "${TRIM_APPDEST}/branding/${asset}" "${TRIM_PKGETC}/searxng/branding/${asset}"
+  fi
+done
+
+chmod 750 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
+chmod 640 "${TRIM_PKGETC}/searxng/settings.yml"
+exit 0

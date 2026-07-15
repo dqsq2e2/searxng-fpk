@@ -1,0 +1,14 @@
+appname=searxng
+version=@VERSION@
+display_name=SearXNG
+desc="SearXNG 搜索服务与飞牛原生配置管理界面"
+platform=@PLATFORM@
+source=thirdparty
+maintainer=dqsq2e2
+distributor=dqsq2e2
+desktop_uidir=ui
+desktop_applaunchname=searxng.admin
+service_port=8080
+checkport=true
+ctl_stop=true
+disable_authorization_path=true
