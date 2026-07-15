@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,17 +14,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 const adminHeader = "X-Trim-Isadmin"
 
 type Config struct {
-	WebRoot       string
-	GatewayPrefix string
-	ServicePort   int
-	Version       string
-	SettingsPath  string
-	BrandingDir   string
+	WebRoot             string
+	GatewayPrefix       string
+	ServicePort         int
+	Version             string
+	SettingsPath        string
+	BrandingDir         string
+	DefaultSettingsPath string
+	ApplySocket         string
+	HealthURL           string
+	ApplyTimeout        time.Duration
+	Apply               func(context.Context) (bool, error)
+	HealthClient        *http.Client
 }
 
 type Handler struct {
@@ -33,6 +42,13 @@ type Handler struct {
 	version       string
 	settingsPath  string
 	brandingDir   string
+	engineCatalog []engineDefinition
+	applySocket   string
+	healthURL     string
+	applyTimeout  time.Duration
+	apply         func(context.Context) (bool, error)
+	healthClient  *http.Client
+	saveMu        sync.Mutex
 }
 
 type statusResponse struct {
@@ -72,6 +88,26 @@ func New(config Config) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve branding directory: %w", err)
 	}
+	defaultSettingsPath, err := filepath.Abs(config.DefaultSettingsPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve default settings path: %w", err)
+	}
+	engineCatalog, err := loadEngineCatalog(defaultSettingsPath)
+	if err != nil {
+		return nil, err
+	}
+	applyTimeout := config.ApplyTimeout
+	if applyTimeout <= 0 {
+		applyTimeout = 60 * time.Second
+	}
+	healthClient := config.HealthClient
+	if healthClient == nil {
+		healthClient = &http.Client{Timeout: 5 * time.Second}
+	}
+	apply := config.Apply
+	if apply == nil {
+		apply = newApplyClient(config.ApplySocket)
+	}
 
 	return &Handler{
 		webRoot:       root,
@@ -80,6 +116,12 @@ func New(config Config) (http.Handler, error) {
 		version:       config.Version,
 		settingsPath:  settingsPath,
 		brandingDir:   brandingDir,
+		engineCatalog: engineCatalog,
+		applySocket:   config.ApplySocket,
+		healthURL:     config.HealthURL,
+		applyTimeout:  applyTimeout,
+		apply:         apply,
+		healthClient:  healthClient,
 	}, nil
 }
 

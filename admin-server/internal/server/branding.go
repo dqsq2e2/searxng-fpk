@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -37,6 +38,8 @@ func (handler *Handler) serveBranding(response http.ResponseWriter, request *htt
 		http.NotFound(response, request)
 		return
 	}
+	handler.saveMu.Lock()
+	defer handler.saveMu.Unlock()
 	data, err := readUpload(request)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -50,11 +53,21 @@ func (handler *Handler) serveBranding(response http.ResponseWriter, request *htt
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	if err := atomicWrite(filepath.Join(handler.brandingDir, asset.Filename), data, 0o644); err != nil {
+	assetPath := filepath.Join(handler.brandingDir, asset.Filename)
+	previous, previousErr := os.ReadFile(assetPath)
+	if previousErr != nil && !errors.Is(previousErr, os.ErrNotExist) {
+		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": "read current branding asset: " + previousErr.Error()})
+		return
+	}
+	if err := atomicWrite(assetPath, data, 0o644); err != nil {
 		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": "save branding asset: " + err.Error()})
 		return
 	}
-	writeJSON(response, http.StatusOK, map[string]any{"saved": true, "asset": assetName, "filename": asset.Filename})
+	result := handler.applyBrandingAsset(assetPath, previous, previousErr == nil)
+	writeJSON(response, http.StatusOK, map[string]any{
+		"saved": !result.RolledBack, "asset": assetName, "filename": asset.Filename,
+		"applied": result.Applied, "restartRequired": result.RestartRequired, "rolledBack": result.RolledBack, "warnings": result.Warnings,
+	})
 }
 
 var errUploadTooLarge = errors.New("branding asset exceeds 2 MiB")

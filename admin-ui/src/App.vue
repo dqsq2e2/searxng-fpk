@@ -4,6 +4,7 @@ import { ApiError, apiRequest } from './api'
 
 type ConnectionState = 'connecting' | 'connected' | 'failed'
 type SectionKey = 'overview' | 'brand' | 'search' | 'ui' | 'outgoing' | 'engines' | 'raw'
+type EngineStatusFilter = 'all' | 'enabled' | 'disabled' | 'unavailable'
 type JsonRecord = Record<string, unknown>
 
 interface StatusResponse {
@@ -24,7 +25,12 @@ interface EngineItem {
   name: string
   label: string
   group: string
+  categories: string[]
+  shortcut: string
   enabled: boolean
+  defaultEnabled: boolean
+  inactive: boolean
+  origin: string
   locked: boolean
   warning: string
   description: string
@@ -106,6 +112,7 @@ const saving = ref(false)
 const restartRequired = ref(false)
 const engineQuery = ref('')
 const engineGroup = ref('全部')
+const engineStatus = ref<EngineStatusFilter>('all')
 const rawYaml = ref('')
 const rawLoading = ref(false)
 const uploadBusy = ref('')
@@ -117,13 +124,19 @@ const connectionText = computed(() => ({
 })[connectionState.value])
 
 const enabledEngineCount = computed(() => config.engines.filter((engine) => engine.enabled).length)
-const engineGroups = computed(() => ['全部', ...new Set(config.engines.map((engine) => engine.group).filter(Boolean))])
+const defaultEnabledEngineCount = computed(() => config.engines.filter((engine) => engine.defaultEnabled).length)
+const unavailableEngineCount = computed(() => config.engines.filter((engine) => engine.inactive).length)
+const engineGroups = computed(() => ['全部', ...new Set(config.engines.flatMap((engine) => engine.categories).filter(Boolean))])
 const filteredEngines = computed(() => {
   const query = engineQuery.value.trim().toLocaleLowerCase()
   return config.engines.filter((engine) => {
-    const groupMatches = engineGroup.value === '全部' || engine.group === engineGroup.value
-    const queryMatches = !query || `${engine.name} ${engine.label} ${engine.description}`.toLocaleLowerCase().includes(query)
-    return groupMatches && queryMatches
+    const groupMatches = engineGroup.value === '全部' || engine.categories.includes(engineGroup.value)
+    const queryMatches = !query || `${engine.name} ${engine.label} ${engine.shortcut} ${engine.categories.join(' ')} ${engine.description}`.toLocaleLowerCase().includes(query)
+    const statusMatches = engineStatus.value === 'all'
+      || (engineStatus.value === 'enabled' && engine.enabled && !engine.inactive)
+      || (engineStatus.value === 'disabled' && !engine.enabled && !engine.inactive)
+      || (engineStatus.value === 'unavailable' && engine.inactive)
+    return groupMatches && queryMatches && statusMatches
   })
 })
 const autocompleteOptions = computed(() => optionStrings('autocomplete', ['', 'bing', 'duckduckgo', 'google', 'brave', 'startpage']))
@@ -234,22 +247,33 @@ function normalizeEngines(configValue: unknown, catalogValue: unknown): EngineIt
     const catalogItem = record(catalog.find((value) => text(record(value).name || record(value).id) === name))
     const setting = settings.get(name) || {}
     const privacyLocked = name.toLocaleLowerCase() === 'chinaso news'
-    const locked = privacyLocked || boolValue(catalogItem.locked, false)
+    const locked = privacyLocked || boolValue(setting.locked ?? catalogItem.locked, false)
+    const inactive = boolValue(setting.inactive ?? catalogItem.inactive ?? catalogItem.defaultInactive, false)
+    const defaultEnabled = boolValue(setting.defaultEnabled ?? setting.default_enabled ?? catalogItem.defaultEnabled ?? catalogItem.default_enabled, !boolValue(setting.disabled ?? catalogItem.disabled, false) && !inactive)
+    const rawCategories = setting.categories ?? setting.category ?? setting.group ?? catalogItem.categories ?? catalogItem.category ?? catalogItem.group
+    const categories = Array.isArray(rawCategories)
+      ? rawCategories.map((value) => text(value)).filter(Boolean)
+      : text(rawCategories) ? [text(rawCategories)] : ['其他']
     const enabled = setting.enabled !== undefined
       ? boolValue(setting.enabled, true)
       : setting.disabled !== undefined
         ? !boolValue(setting.disabled, false)
-        : boolValue(catalogItem.enabled, !boolValue(catalogItem.disabled, false))
+        : boolValue(catalogItem.enabled, defaultEnabled)
     return {
       name,
-      label: text(catalogItem.label || catalogItem.displayName || catalogItem.title, name),
-      group: text(catalogItem.group || catalogItem.category || (Array.isArray(catalogItem.categories) ? catalogItem.categories[0] : ''), '其他'),
-      enabled: locked ? false : enabled,
+      label: text(setting.label || setting.displayName || setting.title || catalogItem.label || catalogItem.displayName || catalogItem.title, name),
+      group: categories[0] || '其他',
+      categories,
+      shortcut: text(setting.shortcut || catalogItem.shortcut, '-'),
+      enabled: locked || inactive ? false : enabled,
+      defaultEnabled,
+      inactive,
+      origin: text(catalogItem.origin || setting.origin, 'default'),
       locked,
       warning: privacyLocked
         ? '该引擎的结果链接存在隐私泄露风险，已强制禁用。'
-        : text(catalogItem.warning || setting.warning),
-      description: text(catalogItem.description || catalogItem.about),
+        : text(setting.warning || catalogItem.warning),
+      description: text(setting.description || setting.about || catalogItem.description || catalogItem.about),
     }
   }).sort((left, right) => left.group.localeCompare(right.group, 'zh-CN') || left.label.localeCompare(right.label, 'zh-CN'))
 }
@@ -342,11 +366,7 @@ function serializedConfig(): JsonRecord {
     },
     engines: config.engines.map((engine) => ({
       name: engine.name,
-      label: engine.label,
-      category: engine.group,
-      enabled: engine.locked ? false : engine.enabled,
-      locked: engine.locked,
-      warning: engine.warning,
+      enabled: engine.locked || engine.inactive ? false : engine.enabled,
     })),
   }
 }
@@ -354,6 +374,29 @@ function serializedConfig(): JsonRecord {
 function setNotice(message: string, tone: typeof noticeTone.value = 'info') {
   notice.value = message
   noticeTone.value = tone
+}
+
+function resultWarnings(result: JsonRecord): string[] {
+  const value = result.warnings
+  return Array.isArray(value) ? value.map((warning) => text(warning)).filter(Boolean) : []
+}
+
+function showApplyResult(result: JsonRecord, subject = '配置') {
+  const applied = boolValue(result.applied, false)
+  const rolledBack = boolValue(result.rolledBack ?? result.rolled_back, false)
+  restartRequired.value = boolValue(result.restartRequired ?? result.restart_required, false)
+  const warnings = resultWarnings(result)
+  const suffix = warnings.length ? ` ${warnings.join('；')}` : ''
+
+  if (rolledBack) {
+    setNotice(`${subject}应用失败，已自动回滚到保存前的可用配置。${suffix}`, 'error')
+  } else if (applied) {
+    setNotice(`${subject}已保存并自动应用，当前服务已生效。${suffix}`, warnings.length ? 'warning' : 'success')
+  } else if (restartRequired.value) {
+    setNotice(`${subject}已保存，但未能自动应用，请手工重启 SearXNG 服务。${suffix}`, 'warning')
+  } else {
+    setNotice(`${subject}已保存，但管理服务未确认应用状态。${suffix}`, 'warning')
+  }
 }
 
 async function loadAll() {
@@ -383,15 +426,14 @@ async function loadAll() {
 async function saveConfig() {
   saving.value = true
   restartRequired.value = false
-  setNotice('正在校验并保存配置…')
+  setNotice('正在保存并自动应用配置…')
   try {
     const result = await apiRequest<Record<string, unknown>>('config', {
       method: 'PUT',
       body: JSON.stringify({ revision: revision.value, config: serializedConfig() }),
     })
     revision.value = result.revision as string | number ?? revision.value
-    restartRequired.value = boolValue(result.restartRequired ?? result.restart_required, true)
-    setNotice(restartRequired.value ? '配置已安全保存。请重启 SearXNG 服务使改动生效。' : '配置已保存并生效。', restartRequired.value ? 'warning' : 'success')
+    showApplyResult(result)
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       setNotice('配置已被其他窗口修改。请重新加载后再保存，避免覆盖新内容。', 'error')
@@ -408,13 +450,12 @@ async function uploadAsset(kind: string, event: Event) {
   const file = input.files?.[0]
   if (!file) return
   uploadBusy.value = kind
-  setNotice(`正在上传 ${file.name}…`)
+  setNotice(`正在上传并自动应用 ${file.name}…`)
   try {
     const body = new FormData()
     body.append('file', file)
     const result = await apiRequest<Record<string, unknown>>(`branding/${kind}`, { method: 'POST', body })
-    restartRequired.value = boolValue(result.restartRequired ?? result.restart_required, true)
-    setNotice(`${file.name} 已上传。${restartRequired.value ? '重启服务后生效。' : ''}`, 'success')
+    showApplyResult(result, `${file.name} `)
   } catch (error) {
     setNotice(errorMessage(error, '文件上传失败。'), 'error')
   } finally {
@@ -448,16 +489,15 @@ async function saveRawYaml() {
     return
   }
   rawLoading.value = true
-  setNotice('正在校验并导入原始 YAML…')
+  setNotice('正在校验、保存并自动应用原始 YAML…')
   try {
     const result = await apiRequest<Record<string, unknown>>('config/raw', {
       method: 'PUT',
       body: JSON.stringify({ yaml: rawYaml.value }),
     })
     revision.value = result.revision as string | number ?? revision.value
-    restartRequired.value = boolValue(result.restartRequired ?? result.restart_required, true)
-    setNotice('原始 YAML 已导入。请重启 SearXNG 服务使配置生效。', 'warning')
     await loadAll()
+    showApplyResult(result, '原始 YAML ')
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) setNotice('原始配置已变化，请重新读取后再导入。', 'error')
     else setNotice(errorMessage(error, '导入原始 YAML 失败。'), 'error')
@@ -495,7 +535,7 @@ function openSection(section: SectionKey) {
 }
 
 function setAllVisible(enabled: boolean) {
-  for (const engine of filteredEngines.value) if (!engine.locked) engine.enabled = enabled
+  for (const engine of filteredEngines.value) if (!engine.locked && !engine.inactive) engine.enabled = enabled
 }
 
 onMounted(loadAll)
@@ -540,7 +580,7 @@ onMounted(loadAll)
             <div class="header-actions">
               <button class="button ghost" type="button" :disabled="loading || saving" @click="loadAll">重新加载</button>
               <button v-if="activeSection !== 'raw'" class="button primary" type="button" :disabled="saving || connectionState !== 'connected'" @click="saveConfig">
-                {{ saving ? '保存中…' : '保存配置' }}
+                {{ saving ? '保存并应用中…' : '保存并应用' }}
               </button>
             </div>
           </header>
@@ -646,18 +686,37 @@ onMounted(loadAll)
           </section>
 
           <section v-else-if="activeSection === 'engines'" class="section-stack">
+            <div class="engine-summary-grid">
+              <article class="engine-summary panel"><span>引擎总数</span><strong>{{ config.engines.length }}</strong><small>固定镜像目录与自定义引擎</small></article>
+              <article class="engine-summary panel"><span>当前启用</span><strong>{{ enabledEngineCount }}</strong><small>本次保存后实际启用</small></article>
+              <article class="engine-summary panel"><span>默认启用</span><strong>{{ defaultEnabledEngineCount }}</strong><small>SearXNG 上游默认状态</small></article>
+              <article class="engine-summary panel"><span>不可用</span><strong>{{ unavailableEngineCount }}</strong><small>inactive，需高级配置后启用</small></article>
+            </div>
             <article class="panel engine-toolbar">
-              <div class="search-box"><span>⌕</span><input v-model="engineQuery" type="search" placeholder="搜索引擎名称、分组或说明"></div>
+              <div class="search-box"><span>⌕</span><input v-model="engineQuery" type="search" placeholder="搜索名称、shortcut 或分类"></div>
               <select v-model="engineGroup"><option v-for="group in engineGroups" :key="group">{{ group }}</option></select>
+              <select v-model="engineStatus" aria-label="引擎状态筛选">
+                <option value="all">全部状态</option>
+                <option value="enabled">已启用</option>
+                <option value="disabled">已禁用</option>
+                <option value="unavailable">不可用</option>
+              </select>
               <button class="button ghost" type="button" @click="setAllVisible(true)">全部启用</button>
               <button class="button ghost" type="button" @click="setAllVisible(false)">全部禁用</button>
             </article>
+            <p class="engine-result-count">显示 {{ filteredEngines.length }} / {{ config.engines.length }} 项；批量操作不会修改锁定或 inactive 引擎。</p>
             <div class="engine-list">
-              <article v-for="engine in filteredEngines" :key="engine.name" class="engine-card panel" :class="{ locked: engine.locked }">
-                <div class="engine-main"><span class="engine-avatar">{{ engine.label.slice(0, 1).toUpperCase() }}</span><div><h3>{{ engine.label }}</h3><p><code>{{ engine.name }}</code><span>{{ engine.group }}</span></p></div></div>
+              <article v-for="engine in filteredEngines" :key="engine.name" class="engine-card panel" :class="{ locked: engine.locked, inactive: engine.inactive }">
+                <div class="engine-main"><span class="engine-avatar">{{ engine.label.slice(0, 1).toUpperCase() }}</span><div><h3>{{ engine.label }}</h3><p><code>{{ engine.name }}</code><span>!{{ engine.shortcut }}</span><span v-for="category in engine.categories.slice(0, 3)" :key="category">{{ category }}</span></p></div></div>
+                <div class="engine-badges">
+                  <span :class="engine.defaultEnabled ? 'positive' : 'neutral'">默认{{ engine.defaultEnabled ? '启用' : '禁用' }}</span>
+                  <span v-if="engine.origin === 'custom'" class="custom">自定义</span>
+                  <span v-if="engine.inactive" class="unavailable">inactive / 不可用</span>
+                </div>
                 <p v-if="engine.description" class="engine-description">{{ engine.description }}</p>
+                <p v-if="engine.inactive" class="engine-warning">该引擎被 SearXNG 标记为 inactive，无法在此直接启用；请先在高级配置中补齐依赖或参数。</p>
                 <p v-if="engine.warning" class="engine-warning">⚠ {{ engine.warning }}</p>
-                <label class="compact-switch"><input v-model="engine.enabled" type="checkbox" :disabled="engine.locked"><i></i><span>{{ engine.enabled ? '已启用' : '已禁用' }}</span></label>
+                <label class="compact-switch"><input v-model="engine.enabled" type="checkbox" :disabled="engine.locked || engine.inactive"><i></i><span>{{ engine.inactive ? '不可用' : engine.enabled ? '已启用' : '已禁用' }}</span></label>
               </article>
               <div v-if="filteredEngines.length === 0" class="empty-state">没有找到匹配的搜索引擎。</div>
             </div>

@@ -85,12 +85,16 @@ type outgoingConfig struct {
 }
 
 type engineConfig struct {
-	Name     string `json:"name"`
-	Label    string `json:"label"`
-	Category string `json:"category"`
-	Enabled  bool   `json:"enabled"`
-	Locked   bool   `json:"locked"`
-	Warning  string `json:"warning"`
+	Name           string `json:"name"`
+	Label          string `json:"label"`
+	Shortcut       string `json:"shortcut"`
+	Category       string `json:"category"`
+	DefaultEnabled bool   `json:"defaultEnabled"`
+	Enabled        bool   `json:"enabled"`
+	Inactive       bool   `json:"inactive"`
+	Origin         string `json:"origin"`
+	Locked         bool   `json:"locked"`
+	Warning        string `json:"warning"`
 }
 
 type configOptions struct {
@@ -117,41 +121,14 @@ type putConfigRequest struct {
 type saveResponse struct {
 	Revision        string   `json:"revision"`
 	Saved           bool     `json:"saved,omitempty"`
+	Applied         bool     `json:"applied"`
 	RestartRequired bool     `json:"restartRequired"`
+	RolledBack      bool     `json:"rolledBack,omitempty"`
 	Warnings        []string `json:"warnings,omitempty"`
 }
 
 type rawConfigRequest struct {
 	YAML string `json:"yaml"`
-}
-
-type engineDefinition struct {
-	Name     string
-	Label    string
-	Category string
-	Locked   bool
-	Warning  string
-}
-
-var managedEngines = []engineDefinition{
-	{Name: "360search", Label: "360 搜索", Category: "general"},
-	{Name: "360search videos", Label: "360 视频", Category: "videos"},
-	{Name: "baidu", Label: "百度", Category: "general"},
-	{Name: "baidu images", Label: "百度图片", Category: "images"},
-	{Name: "baidu kaifa", Label: "百度开发者搜索", Category: "it"},
-	{Name: "bilibili", Label: "哔哩哔哩", Category: "videos"},
-	{Name: "bing", Label: "必应", Category: "general"},
-	{Name: "bing images", Label: "必应图片", Category: "images"},
-	{Name: "bing news", Label: "必应新闻", Category: "news"},
-	{Name: "bing videos", Label: "必应视频", Category: "videos"},
-	{Name: "chinaso news", Label: "中国搜索新闻", Category: "news", Locked: true, Warning: "该引擎的外部链接可能泄露用户搜索信息，存在隐私风险，因此已强制禁用。"},
-	{Name: "iqiyi", Label: "爱奇艺", Category: "videos"},
-	{Name: "quark", Label: "夸克", Category: "general"},
-	{Name: "quark images", Label: "夸克图片", Category: "images"},
-	{Name: "sogou", Label: "搜狗", Category: "general"},
-	{Name: "sogou images", Label: "搜狗图片", Category: "images"},
-	{Name: "sogou videos", Label: "搜狗视频", Category: "videos"},
-	{Name: "sogou wechat", Label: "搜狗微信", Category: "social media"},
 }
 
 func (handler *Handler) serveConfig(response http.ResponseWriter, request *http.Request) {
@@ -173,7 +150,7 @@ func (handler *Handler) getConfig(response http.ResponseWriter) {
 	}
 	writeJSON(response, http.StatusOK, configResponse{
 		Revision: revision(data),
-		Config:   configFromYAML(document),
+		Config:   handler.configFromYAML(document),
 		Options: configOptions{
 			Autocomplete:     autocompleteOptions,
 			FaviconResolvers: faviconOptions,
@@ -187,12 +164,14 @@ func (handler *Handler) getConfig(response http.ResponseWriter) {
 }
 
 func (handler *Handler) putConfig(response http.ResponseWriter, request *http.Request) {
+	handler.saveMu.Lock()
+	defer handler.saveMu.Unlock()
 	var input putConfigRequest
 	if err := decodeJSON(request, &input, maxJSONBody); err != nil {
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	if err := validateConfig(&input.Config); err != nil {
+	if err := handler.validateConfig(&input.Config); err != nil {
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -205,7 +184,7 @@ func (handler *Handler) putConfig(response http.ResponseWriter, request *http.Re
 		writeJSON(response, http.StatusConflict, map[string]string{"error": "configuration revision conflict"})
 		return
 	}
-	applyConfig(document, input.Config)
+	handler.applyConfig(document, input.Config)
 	updated, err := yaml.Marshal(document)
 	if err != nil {
 		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": "encode settings.yml"})
@@ -215,12 +194,12 @@ func (handler *Handler) putConfig(response http.ResponseWriter, request *http.Re
 		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(response, http.StatusOK, saveResponse{
-		Revision:        revision(updated),
-		Saved:           true,
-		RestartRequired: true,
-		Warnings:        []string{"请在飞牛应用中心重启 SearXNG 使配置生效"},
-	})
+	result := handler.applySavedConfiguration(current)
+	revisionData := updated
+	if result.RolledBack {
+		revisionData = current
+	}
+	writeJSON(response, http.StatusOK, saveResponse{Revision: revision(revisionData), Saved: !result.RolledBack, Applied: result.Applied, RestartRequired: result.RestartRequired, RolledBack: result.RolledBack, Warnings: result.Warnings})
 }
 
 func (handler *Handler) serveRawConfig(response http.ResponseWriter, request *http.Request) {
@@ -243,6 +222,8 @@ func (handler *Handler) serveRawConfig(response http.ResponseWriter, request *ht
 }
 
 func (handler *Handler) putRawConfig(response http.ResponseWriter, request *http.Request) {
+	handler.saveMu.Lock()
+	defer handler.saveMu.Unlock()
 	var input rawConfigRequest
 	if err := decodeJSON(request, &input, maxJSONBody); err != nil {
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -277,10 +258,15 @@ func (handler *Handler) putRawConfig(response http.ResponseWriter, request *http
 		writeJSON(response, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(response, http.StatusOK, saveResponse{Revision: revision(updated), Saved: true, RestartRequired: true})
+	result := handler.applySavedConfiguration(current)
+	revisionData := updated
+	if result.RolledBack {
+		revisionData = current
+	}
+	writeJSON(response, http.StatusOK, saveResponse{Revision: revision(revisionData), Saved: !result.RolledBack, Applied: result.Applied, RestartRequired: result.RestartRequired, RolledBack: result.RolledBack, Warnings: result.Warnings})
 }
 
-func configFromYAML(document *yaml.Node) apiConfig {
+func (handler *Handler) configFromYAML(document *yaml.Node) apiConfig {
 	config := apiConfig{
 		Brand: brandConfig{
 			InstanceName:       scalarString(lookupPath(document, "general", "instance_name"), "SearXNG"),
@@ -323,20 +309,11 @@ func configFromYAML(document *yaml.Node) apiConfig {
 			ExtraProxyTimeout: scalarFloat(lookupPath(document, "outgoing", "extra_proxy_timeout"), 0),
 		},
 	}
-	for _, definition := range managedEngines {
-		disabled := engineDisabled(document, definition.Name)
-		if definition.Locked {
-			disabled = true
-		}
-		config.Engines = append(config.Engines, engineConfig{
-			Name: definition.Name, Label: definition.Label, Category: definition.Category,
-			Enabled: !disabled, Locked: definition.Locked, Warning: definition.Warning,
-		})
-	}
+	config.Engines = handler.enginesFromYAML(document)
 	return config
 }
 
-func validateConfig(config *apiConfig) error {
+func (handler *Handler) validateConfig(config *apiConfig) error {
 	if strings.TrimSpace(config.Brand.InstanceName) == "" || len(config.Brand.InstanceName) > 100 {
 		return errors.New("brand.instanceName must be 1-100 characters")
 	}
@@ -413,29 +390,37 @@ func validateConfig(config *apiConfig) error {
 	if err := validateProxy(config.Outgoing.ProxyURL); err != nil {
 		return err
 	}
-	knownEngines := make(map[string]engineDefinition, len(managedEngines))
-	for _, definition := range managedEngines {
+	knownEngines := make(map[string]engineDefinition, len(handler.engineCatalog))
+	for _, definition := range handler.engineCatalog {
 		knownEngines[definition.Name] = definition
 	}
-	if len(config.Engines) != len(managedEngines) {
-		return errors.New("engines must contain the complete managed engine list")
+	customEngines := customEngineNames(handler.settingsPath, knownEngines)
+	if len(config.Engines) != len(handler.engineCatalog)+len(customEngines) {
+		return errors.New("engines must contain the complete engine list")
 	}
 	seen := make(map[string]bool, len(config.Engines))
 	for index := range config.Engines {
 		engine := &config.Engines[index]
-		definition, ok := knownEngines[engine.Name]
-		if !ok || seen[engine.Name] {
+		definition, known := knownEngines[engine.Name]
+		_, custom := customEngines[engine.Name]
+		if (!known && !custom) || seen[engine.Name] {
 			return fmt.Errorf("invalid or duplicate engine %q", engine.Name)
 		}
 		seen[engine.Name] = true
-		if definition.Locked {
+		if engine.Name == "chinaso news" {
+			engine.Enabled = false
+			engine.Inactive = true
+		} else if known && definition.DefaultInactive {
+			engine.Enabled = false
+			engine.Inactive = true
+		} else if engine.Inactive {
 			engine.Enabled = false
 		}
 	}
 	return nil
 }
 
-func applyConfig(document *yaml.Node, config apiConfig) {
+func (handler *Handler) applyConfig(document *yaml.Node, config apiConfig) {
 	setPath(document, scalarNode(config.Brand.InstanceName), "general", "instance_name")
 	setOptionalString(document, config.Brand.BaseURL, "server", "base_url")
 	setOptionalString(document, config.Brand.PrivacyPolicyURL, "general", "privacypolicy_url")
@@ -476,9 +461,7 @@ func applyConfig(document *yaml.Node, config apiConfig) {
 	}
 	setPath(document, scalarNode(config.Outgoing.UsingTorProxy), "outgoing", "using_tor_proxy")
 	setPath(document, scalarNode(config.Outgoing.ExtraProxyTimeout), "outgoing", "extra_proxy_timeout")
-	for _, engine := range config.Engines {
-		setEngineDisabled(document, engine.Name, !engine.Enabled || engine.Name == "chinaso news")
-	}
+	handler.applyEngines(document, config.Engines)
 }
 
 func readYAMLDocument(filename string) ([]byte, *yaml.Node, error) {
@@ -749,33 +732,171 @@ func scalarBool(node *yaml.Node, fallback bool) bool {
 	return value
 }
 
-func engineDisabled(document *yaml.Node, name string) bool {
+func engineNode(document *yaml.Node, name string) *yaml.Node {
 	engines := lookupPath(document, "engines")
 	if engines == nil || engines.Kind != yaml.SequenceNode {
-		return true
+		return nil
 	}
 	for _, engine := range engines.Content {
 		if scalarString(mappingValue(engine, "name"), "") == name {
-			return scalarBool(mappingValue(engine, "disabled"), false)
+			return engine
 		}
 	}
-	return true
+	return nil
 }
 
-func setEngineDisabled(document *yaml.Node, name string, disabled bool) {
+func (handler *Handler) enginesFromYAML(document *yaml.Node) []engineConfig {
+	engines := make([]engineConfig, 0, len(handler.engineCatalog))
+	known := make(map[string]struct{}, len(handler.engineCatalog))
+	for _, definition := range handler.engineCatalog {
+		known[definition.Name] = struct{}{}
+		override := engineNode(document, definition.Name)
+		disabled := nodeBool(mappingValue(override, "disabled"), definition.DefaultDisabled)
+		inactive := nodeBool(mappingValue(override, "inactive"), definition.DefaultInactive)
+		locked := definition.Name == "chinaso news"
+		warning := ""
+		if locked {
+			disabled = true
+			inactive = true
+			warning = "该引擎的外部链接可能泄露用户搜索信息，存在隐私风险，因此已强制禁用。"
+		} else if inactive {
+			warning = "该引擎被 SearXNG 上游标记为 inactive，当前版本不可用。"
+		}
+		engines = append(engines, engineConfig{
+			Name: definition.Name, Label: definition.Label, Shortcut: definition.Shortcut, Category: definition.Category,
+			DefaultEnabled: !definition.DefaultDisabled && !definition.DefaultInactive,
+			Enabled:        !disabled && !inactive, Inactive: inactive, Origin: "default", Locked: locked, Warning: warning,
+		})
+	}
+	configured := lookupPath(document, "engines")
+	if configured != nil && configured.Kind == yaml.SequenceNode {
+		for _, engine := range configured.Content {
+			name := scalarString(mappingValue(engine, "name"), "")
+			if name == "" {
+				continue
+			}
+			if _, exists := known[name]; exists {
+				continue
+			}
+			disabled := scalarBool(mappingValue(engine, "disabled"), false)
+			inactive := scalarBool(mappingValue(engine, "inactive"), false)
+			engines = append(engines, engineConfig{
+				Name: name, Label: name, Shortcut: scalarString(mappingValue(engine, "shortcut"), ""), Category: engineCategory(engine),
+				DefaultEnabled: true, Enabled: !disabled && !inactive, Inactive: inactive, Origin: "custom",
+			})
+		}
+	}
+	return engines
+}
+
+func nodeBool(node *yaml.Node, fallback bool) bool {
+	if node == nil {
+		return fallback
+	}
+	return scalarBool(node, fallback)
+}
+
+func customEngineNames(settingsPath string, known map[string]engineDefinition) map[string]struct{} {
+	result := make(map[string]struct{})
+	_, document, err := readYAMLDocument(settingsPath)
+	if err != nil {
+		return result
+	}
+	engines := lookupPath(document, "engines")
+	if engines == nil || engines.Kind != yaml.SequenceNode {
+		return result
+	}
+	for _, engine := range engines.Content {
+		name := scalarString(mappingValue(engine, "name"), "")
+		if _, exists := known[name]; name != "" && !exists {
+			result[name] = struct{}{}
+		}
+	}
+	return result
+}
+
+func (handler *Handler) applyEngines(document *yaml.Node, requested []engineConfig) {
+	definitions := make(map[string]engineDefinition, len(handler.engineCatalog))
+	for _, definition := range handler.engineCatalog {
+		definitions[definition.Name] = definition
+	}
+	for _, engine := range requested {
+		definition, isDefault := definitions[engine.Name]
+		disabled := !engine.Enabled
+		inactive := engine.Inactive
+		if engine.Enabled {
+			inactive = false
+		}
+		if engine.Name == "chinaso news" {
+			node := ensureEngineNode(document, engine.Name)
+			setMappingValue(node, "disabled", scalarNode(true))
+			setMappingValue(node, "inactive", scalarNode(true))
+			continue
+		}
+		if isDefault && definition.DefaultInactive {
+			disabled = definition.DefaultDisabled
+			inactive = true
+		}
+		if isDefault {
+			setEngineOverride(document, engine.Name, "disabled", disabled, definition.DefaultDisabled)
+			setEngineOverride(document, engine.Name, "inactive", inactive, definition.DefaultInactive)
+			removeEmptyDefaultEngine(document, engine.Name)
+			continue
+		}
+		node := ensureEngineNode(document, engine.Name)
+		setMappingValue(node, "disabled", scalarNode(disabled))
+		setMappingValue(node, "inactive", scalarNode(inactive))
+	}
+}
+
+func setEngineOverride(document *yaml.Node, name, key string, value, defaultValue bool) {
+	node := engineNode(document, name)
+	if value == defaultValue {
+		if node != nil {
+			deleteMappingValue(node, key)
+		}
+		return
+	}
+	node = ensureEngineNode(document, name)
+	setMappingValue(node, key, scalarNode(value))
+}
+
+func ensureEngineNode(document *yaml.Node, name string) *yaml.Node {
+	if existing := engineNode(document, name); existing != nil {
+		return existing
+	}
 	engines := lookupPath(document, "engines")
 	if engines == nil || engines.Kind != yaml.SequenceNode {
 		engines = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 		setPath(document, engines, "engines")
 	}
-	for _, engine := range engines.Content {
-		if scalarString(mappingValue(engine, "name"), "") == name {
-			setMappingValue(engine, "disabled", scalarNode(disabled))
+	engine := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	setMappingValue(engine, "name", scalarNode(name))
+	engines.Content = append(engines.Content, engine)
+	return engine
+}
+
+func removeEmptyDefaultEngine(document *yaml.Node, name string) {
+	engines := lookupPath(document, "engines")
+	if engines == nil || engines.Kind != yaml.SequenceNode {
+		return
+	}
+	for index, engine := range engines.Content {
+		if scalarString(mappingValue(engine, "name"), "") == name && len(engine.Content) == 2 {
+			engines.Content = append(engines.Content[:index], engines.Content[index+1:]...)
 			return
 		}
 	}
-	engine := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	setMappingValue(engine, "name", scalarNode(name))
-	setMappingValue(engine, "disabled", scalarNode(disabled))
-	engines.Content = append(engines.Content, engine)
+}
+
+func deleteMappingValue(mapping *yaml.Node, key string) {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			mapping.Content = append(mapping.Content[:index], mapping.Content[index+2:]...)
+			return
+		}
+	}
 }

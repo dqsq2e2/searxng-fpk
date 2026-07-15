@@ -2,6 +2,8 @@
 set -eu
 
 settings_file="${TRIM_PKGETC}/searxng/settings.yml"
+mkdir -p "${TRIM_PKGVAR}/control"
+chmod 770 "${TRIM_PKGVAR}/control"
 if [ ! -f "${settings_file}" ]; then
   exit 0
 fi

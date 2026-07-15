@@ -2,8 +2,8 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -141,8 +141,14 @@ func TestGetAndPutConfigPreservesSecretAndUnknownFields(t *testing.T) {
 	if current.Config.Brand.InstanceName != "Original" || current.Config.Search.Autocomplete != "baidu" {
 		t.Fatalf("unexpected config: %+v", current.Config)
 	}
-	if len(current.Config.Engines) != len(managedEngines) {
-		t.Fatalf("engines = %d, want %d", len(current.Config.Engines), len(managedEngines))
+	if len(current.Config.Engines) != 7 {
+		t.Fatalf("engines = %d, want 7", len(current.Config.Engines))
+	}
+	if bing := findEngine(t, current.Config.Engines, "bing"); !bing.Enabled || !bing.DefaultEnabled || bing.Shortcut != "bi" {
+		t.Fatalf("unexpected bing config: %+v", bing)
+	}
+	if custom := findEngine(t, current.Config.Engines, "custom engine"); custom.Origin != "custom" || !custom.Enabled {
+		t.Fatalf("unexpected custom engine: %+v", custom)
 	}
 	chinaso := findEngine(t, current.Config.Engines, "chinaso news")
 	if chinaso.Enabled || !chinaso.Locked || chinaso.Warning == "" {
@@ -162,6 +168,9 @@ func TestGetAndPutConfigPreservesSecretAndUnknownFields(t *testing.T) {
 	current.Config.Outgoing.ProxyURL = "socks5h://127.0.0.1:9050"
 	findEnginePointer(t, current.Config.Engines, "baidu").Enabled = true
 	findEnginePointer(t, current.Config.Engines, "chinaso news").Enabled = true
+	inactive := findEnginePointer(t, current.Config.Engines, "inactive engine")
+	inactive.Enabled = true
+	inactive.Inactive = false
 	body, err := json.Marshal(putConfigRequest{Revision: current.Revision, Config: current.Config})
 	if err != nil {
 		t.Fatalf("marshal config: %v", err)
@@ -174,7 +183,7 @@ func TestGetAndPutConfigPreservesSecretAndUnknownFields(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&saved); err != nil {
 		t.Fatalf("decode save response: %v", err)
 	}
-	if !saved.Saved || !saved.RestartRequired || len(saved.Warnings) != 1 {
+	if !saved.Saved || !saved.Applied || saved.RestartRequired || saved.RolledBack || len(saved.Warnings) != 0 {
 		t.Fatalf("unexpected save response: %+v", saved)
 	}
 
@@ -202,11 +211,18 @@ func TestGetAndPutConfigPreservesSecretAndUnknownFields(t *testing.T) {
 			t.Fatalf("empty optional setting %v should be removed, got tag=%s value=%q", path, node.Tag, node.Value)
 		}
 	}
-	if engineDisabled(document, "baidu") {
+	if scalarBool(mappingValue(engineNode(document, "baidu"), "disabled"), true) {
 		t.Fatal("baidu should be enabled")
 	}
-	if !engineDisabled(document, "chinaso news") {
+	if !scalarBool(mappingValue(engineNode(document, "chinaso news"), "disabled"), false) {
 		t.Fatal("chinaso must remain disabled")
+	}
+	if !scalarBool(mappingValue(engineNode(document, "chinaso news"), "inactive"), false) {
+		t.Fatal("chinaso must remain inactive")
+	}
+	reloaded := getTestConfig(t, handler)
+	if engine := findEngine(t, reloaded.Config.Engines, "inactive engine"); engine.Enabled || !engine.Inactive {
+		t.Fatalf("upstream inactive engine was activated: %+v", engine)
 	}
 	backup, err := os.ReadFile(settingsPath + ".bak")
 	if err != nil || !bytes.Contains(backup, []byte("instance_name: Original")) {
@@ -291,13 +307,21 @@ func newTestEnvironment(t *testing.T, prefix string) (http.Handler, string, stri
 		t.Fatalf("write settings: %v", err)
 	}
 	brandingDir := filepath.Join(configDir, "branding")
+	defaultSettingsPath := filepath.Join(configDir, "default-settings.yml")
+	if err := os.WriteFile(defaultSettingsPath, []byte(testDefaultSettingsYAML()), 0o600); err != nil {
+		t.Fatalf("write default settings: %v", err)
+	}
 	handler, err := New(Config{
-		WebRoot:       webRoot,
-		GatewayPrefix: prefix,
-		ServicePort:   8888,
-		Version:       "test-version",
-		SettingsPath:  settingsPath,
-		BrandingDir:   brandingDir,
+		WebRoot:             webRoot,
+		GatewayPrefix:       prefix,
+		ServicePort:         8888,
+		Version:             "test-version",
+		SettingsPath:        settingsPath,
+		DefaultSettingsPath: defaultSettingsPath,
+		BrandingDir:         brandingDir,
+		Apply: func(context.Context) (bool, error) {
+			return true, nil
+		},
 	})
 	if err != nil {
 		t.Fatalf("create handler: %v", err)
@@ -314,10 +338,43 @@ func testSettingsYAML() string {
 	builder.WriteString("ui:\n  default_theme: simple\n  default_locale: ''\n  theme_args:\n    simple_style: auto\n  query_in_title: false\n  center_alignment: false\n  results_on_new_tab: false\n  search_on_category_select: true\n  hotkeys: default\n  url_formatting: pretty\n")
 	builder.WriteString("outgoing:\n  request_timeout: 3.0\n  max_request_timeout: 10.0\n  pool_connections: 100\n  pool_maxsize: 20\n  enable_http2: true\n  proxies: null\n  using_tor_proxy: false\n  extra_proxy_timeout: 0\n")
 	builder.WriteString("custom:\n  untouched: preserved\nengines:\n")
-	for _, engine := range managedEngines {
-		builder.WriteString(fmt.Sprintf("  - name: %s\n    disabled: true\n", engine.Name))
-	}
+	builder.WriteString("  - name: baidu\n    disabled: true\n")
+	builder.WriteString("  - name: chinaso news\n    disabled: false\n    inactive: false\n")
+	builder.WriteString("  - name: custom engine\n    engine: xpath\n    shortcut: ce\n    categories: general\n    disabled: false\n")
 	return builder.String()
+}
+
+func testDefaultSettingsYAML() string {
+	return `engines:
+  - name: bing
+    engine: bing
+    shortcut: bi
+    categories: [general]
+  - name: baidu
+    engine: baidu
+    shortcut: bd
+    categories: [general]
+    disabled: true
+  - name: google
+    engine: google
+    shortcut: go
+    categories: [general]
+  - name: quark
+    engine: quark
+    shortcut: qk
+    disabled: true
+  - name: inactive engine
+    engine: example
+    shortcut: ie
+    disabled: true
+    inactive: true
+  - name: chinaso news
+    engine: chinaso
+    shortcut: chinaso
+    categories: [news]
+    disabled: true
+    inactive: true
+`
 }
 
 func getTestConfig(t *testing.T, handler http.Handler) configResponse {

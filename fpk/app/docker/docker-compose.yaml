@@ -44,7 +44,51 @@ services:
       - /config/settings.yml
       - --branding-dir
       - /config/branding
+      - --default-settings
+      - /usr/local/searxng/searx/settings.yml
+      - --apply-socket
+      - /data/control/apply.sock
+      - --health-url
+      - http://searxng:8080/healthz
+      - --apply-timeout
+      - 60s
     volumes:
       - "${TRIM_APPDEST}:/app:rw"
       - "${TRIM_PKGETC}/searxng:/config:rw"
       - "${TRIM_PKGVAR}:/data:rw"
+    depends_on:
+      - searxng
+      - apply-controller
+
+  apply-controller:
+    image: searxng/searxng@sha256:1e9c9535cffd1d9d209985905091308257e23b2f4783fbd3b626c0a56285b80c
+    container_name: searxng-apply-fpk
+    restart: unless-stopped
+    user: "${TRIM_UID}:${TRIM_GID}"
+    group_add:
+      - "995"
+    entrypoint:
+      - /app/server/searxng-admin
+    command:
+      - --mode
+      - apply-controller
+      - --socket
+      - /control/apply.sock
+      - --socket-mode
+      - "0660"
+      - --docker-socket
+      - /var/run/docker.sock
+      - --container
+      - searxng-fpk
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - "${TRIM_APPDEST}:/app:ro"
+      - "${TRIM_PKGVAR}/control:/control:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock:rw"
+    depends_on:
+      - searxng

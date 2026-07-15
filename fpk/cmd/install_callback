@@ -16,8 +16,9 @@ fail() {
 [ -f "${TRIM_APPDEST}/branding/settings.yml" ] || fail "安装失败：应用配置模板未正确安装。"
 [ -f "${TRIM_APPDEST}/branding/default-engines.yml" ] || fail "安装失败：默认引擎配置未正确安装。"
 
-mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs" || fail "安装失败：无法创建应用配置或数据目录。"
+mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs" "${TRIM_PKGVAR}/control" || fail "安装失败：无法创建应用配置或数据目录。"
 chmod 755 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
+chmod 770 "${TRIM_PKGVAR}/control"
 
 if [ ! -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
   secret_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
