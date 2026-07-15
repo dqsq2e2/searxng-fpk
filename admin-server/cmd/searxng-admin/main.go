@@ -17,7 +17,7 @@ import (
 	"searxng-admin/internal/server"
 )
 
-const version = "0.1.1"
+const version = "0.1.3"
 
 type options struct {
 	socketPath    string

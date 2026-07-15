@@ -23,3 +23,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  admin:
+    image: searxng/searxng@sha256:1e9c9535cffd1d9d209985905091308257e23b2f4783fbd3b626c0a56285b80c
+    container_name: searxng-admin-fpk
+    restart: unless-stopped
+    user: "${TRIM_UID}:${TRIM_GID}"
+    entrypoint:
+      - /app/server/searxng-admin
+    command:
+      - --socket
+      - /app/admin.sock
+      - --web-root
+      - /app/admin-ui
+      - --gateway-prefix
+      - /app/searxng-admin
+      - --service-port
+      - "${TRIM_SERVICE_PORT}"
+    volumes:
+      - "${TRIM_APPDEST}:/app:rw"
+      - "${TRIM_PKGETC}/searxng:/config:rw"
+      - "${TRIM_PKGVAR}:/data:rw"

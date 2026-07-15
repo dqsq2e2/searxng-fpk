@@ -9,6 +9,6 @@ distributor=dqsq2e2
 desktop_uidir=ui
 desktop_applaunchname=searxng.admin
 service_port=8080
-checkport=true
+checkport=false
 ctl_stop=true
 disable_authorization_path=true

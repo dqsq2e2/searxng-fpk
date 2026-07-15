@@ -19,6 +19,15 @@ jobs:
         run: |
           chmod +x tools/test-lifecycle.sh fpk/cmd/*
           ./tools/test-lifecycle.sh
+      - name: Validate Docker Compose
+        env:
+          TRIM_SERVICE_PORT: '8080'
+          TRIM_APPDEST: /tmp/searxng/target
+          TRIM_PKGETC: /tmp/searxng/etc
+          TRIM_PKGVAR: /tmp/searxng/var
+          TRIM_UID: '985'
+          TRIM_GID: '982'
+        run: docker compose -f fpk/app/docker/docker-compose.yaml config
 
   ui:
     runs-on: ubuntu-latest

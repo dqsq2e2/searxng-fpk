@@ -11,7 +11,12 @@ fail() {
 }
 
 [ -n "${TRIM_APPDEST:-}" ] || fail "安装失败：系统未提供 TRIM_APPDEST。"
+[ -n "${TRIM_PKGETC:-}" ] || fail "安装失败：系统未提供 TRIM_PKGETC。"
+[ -n "${TRIM_PKGVAR:-}" ] || fail "安装失败：系统未提供 TRIM_PKGVAR。"
 [ -f "${TRIM_APPDEST}/branding/settings.yml" ] || fail "安装失败：应用配置模板未正确安装。"
+
+mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs" || fail "安装失败：无法创建应用配置或数据目录。"
+chmod 755 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
 
 if [ ! -f "${TRIM_PKGETC}/searxng/settings.yml" ]; then
   secret_key="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"

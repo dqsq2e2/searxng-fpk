@@ -1,43 +1,20 @@
-#!/bin/sh
-set -eu
+#!/bin/bash
 
-pid_file="${TRIM_PKGVAR}/searxng-admin.pid"
-log_file="${TRIM_PKGVAR}/logs/searxng-admin.log"
-socket_file="${TRIM_APPDEST}/admin.sock"
-
-is_running() {
-  [ -f "${pid_file}" ] && kill -0 "$(cat "${pid_file}")" 2>/dev/null
+is_container_running() {
+  docker inspect "$1" 2>/dev/null | grep -q '"Status": "running"'
 }
 
 case "${1:-}" in
-  start)
-    if is_running; then
-      exit 0
-    fi
-    rm -f "${socket_file}"
-    "${TRIM_APPDEST}/server/searxng-admin" \
-      --socket "${socket_file}" \
-      --web-root "${TRIM_APPDEST}/admin-ui" \
-      --gateway-prefix "/app/searxng-admin" \
-      --service-port "${TRIM_SERVICE_PORT}" \
-      >>"${log_file}" 2>&1 &
-    echo $! > "${pid_file}"
-    ;;
-  stop)
-    if is_running; then
-      kill "$(cat "${pid_file}")"
-      wait "$(cat "${pid_file}")" 2>/dev/null || true
-    fi
-    rm -f "${pid_file}" "${socket_file}"
+  start|stop)
+    exit 0
     ;;
   status)
-    if is_running; then
+    if is_container_running searxng-fpk && is_container_running searxng-admin-fpk; then
       exit 0
     fi
     exit 3
     ;;
   *)
-    echo "usage: $0 {start|stop|status}" >&2
-    exit 2
+    exit 1
     ;;
 esac

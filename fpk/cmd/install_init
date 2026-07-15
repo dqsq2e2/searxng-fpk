@@ -1,18 +1,2 @@
 #!/bin/bash
-set -eu
-
-fail() {
-  message="$1"
-  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
-    printf '%s\n' "${message}" > "${TRIM_TEMP_LOGFILE}"
-  fi
-  printf '%s\n' "${message}" >&2
-  exit 1
-}
-
-[ -n "${TRIM_PKGETC:-}" ] || fail "安装失败：系统未提供 TRIM_PKGETC。"
-[ -n "${TRIM_PKGVAR:-}" ] || fail "安装失败：系统未提供 TRIM_PKGVAR。"
-
-mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs"
-chmod 755 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
 exit 0
