@@ -1,3 +1,27 @@
 #!/bin/sh
 set -eu
+
+settings_file="${TRIM_PKGETC}/searxng/settings.yml"
+if [ -f "${settings_file}" ] && ! grep -Eq '^[[:space:]]+favicon_resolver:' "${settings_file}"; then
+  temporary_settings="${TRIM_PKGETC}/searxng/.settings.yml.favicon.$$"
+  awk '
+    BEGIN { inserted = 0 }
+    /^search:[[:space:]]*$/ && inserted == 0 {
+      print
+      print "  favicon_resolver: \"duckduckgo\""
+      inserted = 1
+      next
+    }
+    { print }
+    END {
+      if (inserted == 0) {
+        print ""
+        print "search:"
+        print "  favicon_resolver: \"duckduckgo\""
+      }
+    }
+  ' "${settings_file}" > "${temporary_settings}"
+  chmod 644 "${temporary_settings}"
+  mv "${temporary_settings}" "${settings_file}"
+fi
 exit 0

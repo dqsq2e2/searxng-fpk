@@ -11,6 +11,7 @@ server:
 search:
   safe_search: 0
   autocomplete: ""
+  favicon_resolver: "duckduckgo"
   default_lang: "auto"
 
 ui:

@@ -1,8 +1,11 @@
-const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || ''
+const configuredApiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim().replace(/\/+$/, '')
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const normalizedPath = path.replace(/^\/+/, '')
-  const response = await fetch(`${apiBase}/api/${normalizedPath}`, {
+  const requestUrl = configuredApiBase
+    ? `${configuredApiBase}/api/${normalizedPath}`
+    : `api/${normalizedPath}`
+  const response = await fetch(requestUrl, {
     ...init,
     headers: {
       Accept: 'application/json',

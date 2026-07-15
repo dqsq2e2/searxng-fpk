@@ -1,10 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { apiRequest } from './api'
+
+type ConnectionState = 'connecting' | 'connected' | 'failed'
+
+interface StatusResponse {
+  status: string
+  serviceUrl: string
+}
 
 const serviceAddress = ref('http://设备地址:8080')
 const notice = ref('当前为前端骨架，保存接口将在管理后端接入后启用。')
 const busyAction = ref('')
+const connectionState = ref<ConnectionState>('connecting')
+
+const connectionText = computed(() => ({
+  connecting: '管理服务连接中',
+  connected: '管理服务已连接',
+  failed: '管理服务连接失败',
+})[connectionState.value])
 
 const groups = [
   { title: '品牌化', description: '站点名称、基础 URL、主题与 Logo。', icon: '品' },
@@ -26,6 +40,23 @@ async function runAction(action: string, endpoint: string) {
     busyAction.value = ''
   }
 }
+
+async function checkConnection() {
+  connectionState.value = 'connecting'
+  notice.value = '正在检查管理服务连接…'
+
+  try {
+    const status = await apiRequest<StatusResponse>('status')
+    serviceAddress.value = status.serviceUrl
+    connectionState.value = 'connected'
+    notice.value = '管理服务连接正常。'
+  } catch (error) {
+    connectionState.value = 'failed'
+    notice.value = error instanceof Error ? error.message : '管理服务连接失败。'
+  }
+}
+
+onMounted(checkConnection)
 </script>
 
 <template>
@@ -36,7 +67,7 @@ async function runAction(action: string, endpoint: string) {
         <h1>SearXNG 配置管理</h1>
         <p class="subtitle">集中管理搜索服务的全局配置、引擎与配置文件。</p>
       </div>
-      <span class="status"><i></i> 管理服务待连接</span>
+      <span class="status" :class="connectionState"><i></i> {{ connectionText }}</span>
     </header>
 
     <section class="service-card">
@@ -45,8 +76,8 @@ async function runAction(action: string, endpoint: string) {
         <strong>{{ serviceAddress }}</strong>
         <small>主服务保持原生 IP:端口访问方式</small>
       </div>
-      <button class="secondary" type="button" @click="notice = '服务地址将在状态接口接入后自动获取。'">
-        检查连接
+      <button class="secondary" type="button" :disabled="connectionState === 'connecting'" @click="checkConnection">
+        {{ connectionState === 'connecting' ? '检查中…' : '检查连接' }}
       </button>
     </section>
 

@@ -20,6 +20,9 @@ h2 { margin-bottom: 0; font-size: 24px; }
 .subtitle { margin-bottom: 0; color: #657274; font-size: 16px; }
 .status { padding: 9px 14px; border: 1px solid #c8d8d4; border-radius: 999px; background: #fff; color: #526260; font-size: 13px; white-space: nowrap; }
 .status i { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: #e3a72f; }
+.status.connected i { background: #15966f; }
+.status.failed { border-color: #f0ccc7; color: #a33b2e; }
+.status.failed i { background: #d95745; }
 
 .service-card, .group-card, .tools { border: 1px solid #dce7e4; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px rgba(31, 69, 62, .06); }
 .service-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 24px; }

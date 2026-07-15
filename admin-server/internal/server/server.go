@@ -191,13 +191,6 @@ func serveFile(response http.ResponseWriter, request *http.Request, filename str
 }
 
 func serviceURL(request *http.Request, port int) string {
-	scheme := "http"
-	if forwarded := strings.TrimSpace(strings.Split(request.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded == "http" || forwarded == "https" {
-		scheme = forwarded
-	} else if request.TLS != nil {
-		scheme = "https"
-	}
-
 	host := request.Host
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
 		host = parsedHost
@@ -207,7 +200,7 @@ func serviceURL(request *http.Request, port int) string {
 	if host == "" {
 		host = "localhost"
 	}
-	return scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port))
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(port))
 }
 
 func writeJSON(response http.ResponseWriter, status int, value any) {

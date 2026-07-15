@@ -26,6 +26,7 @@ mkdir -p "${TRIM_PKGETC}" "${TRIM_PKGVAR}"
 
 test -f "${TRIM_PKGETC}/searxng/settings.yml"
 test -f "${TRIM_PKGETC}/searxng/branding/searxng.png"
+grep -q 'favicon_resolver: "duckduckgo"' "${TRIM_PKGETC}/searxng/settings.yml"
 if grep -q '@SECRET_KEY@' "${TRIM_PKGETC}/searxng/settings.yml"; then
   echo "settings secret placeholder was not replaced" >&2
   exit 1
