@@ -1,7 +1,7 @@
 appname=searxng
 version=@VERSION@
 display_name=SearXNG
-desc="""<p>SearXNG是一个注重隐私的元搜索应用。它将多个搜索来源汇集到统一界面中，让你在自己的设备上获得简洁、开放且更注重隐私的搜索体验。</p><p><img src='https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true' width='816' alt='SearXNG for fnOS'></p>"""
+desc="""SearXNG是一个注重隐私的元搜索应用。<br>它将多个搜索来源汇集到统一界面中，让你在自己的设备上获得简洁、开放且更注重隐私的搜索体验。<br><img height=auto width=816px src="https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true" />"""
 platform=@PLATFORM@
 source=thirdparty
 maintainer=searxng
