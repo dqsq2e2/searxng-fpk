@@ -19,7 +19,7 @@ import (
 	"searxng-admin/internal/server"
 )
 
-const version = "0.2.2"
+const version = "2026.7.15"
 
 type options struct {
 	mode                string

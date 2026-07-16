@@ -18,7 +18,7 @@
 - 默认使用 Bing 搜索建议与 Google 网站图标解析器。
 - 支持上传 Logo/Favicon/PWA 图标，以及导入导出原始 `settings.yml`。
 - Wordmark 仅支持 SVG；页面 Logo 仅支持 PNG（推荐 640×110）；浏览器图标同时支持独立 PNG 与 SVG；PWA 图标必须分别为 192×192 和 512×512 PNG。
-- 引擎目录直接读取固定官方镜像的默认 `settings.yml`，当前版本展示全部 345 个默认引擎及自定义引擎。
+- 引擎目录直接读取固定官方镜像的默认 `settings.yml`，当前 `2026.7.15` 镜像展示全部 346 个默认引擎及自定义引擎。
 - 保存采用 revision 冲突检测、YAML 校验、备份和原子替换，并通过隔离控制器自动重启 SearXNG；健康失败时自动回滚。
 
 ## 目录
@@ -47,4 +47,4 @@ GitHub Actions 会自动构建 `x86` 和 `arm` 两个安装包；推送 `v*` 标
 
 ## 上游镜像
 
-默认固定为 `searxng/searxng:2026.7.10-4abac08de` 对应的 OCI digest，更新版本时需同步修改 `fpk/app/docker/docker-compose.yaml` 并完成回归验证。
+默认镜像为 `searxng/searxng:2026.7.15-7b2199ecd`，并固定 OCI 多架构摘要 `sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f`。手动拉取可使用 `docker pull searxng/searxng:2026.7.15-7b2199ecd`。

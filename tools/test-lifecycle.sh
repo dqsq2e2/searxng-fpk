@@ -41,6 +41,7 @@ fi
 python3 - "${repo_root}" <<'PY'
 import json
 import pathlib
+import struct
 import sys
 
 root = pathlib.Path(sys.argv[1])
@@ -52,14 +53,27 @@ for relative in (
     "fpk/wizard/uninstall",
 ):
     json.loads((root / relative).read_text(encoding="utf-8"))
+
+def png_size(relative):
+    data = (root / relative).read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", relative
+    return struct.unpack(">II", data[16:24])
+
+assert png_size("assets/icon_64.png") == (256, 256)
+assert png_size("assets/icon_256.png") == (1024, 1024)
 PY
 
 grep -q '^checkport=false$' "${repo_root}/fpk/manifest"
+grep -q '^maintainer=searxng$' "${repo_root}/fpk/manifest"
+grep -q '^maintainer_url=https://github.com/searxng/searxng$' "${repo_root}/fpk/manifest"
+grep -q '^distributor=dqsq2e2$' "${repo_root}/fpk/manifest"
+grep -q '^distributor_url=https://github.com/dqsq2e2/searxng-fpk$' "${repo_root}/fpk/manifest"
 grep -q 'container_name: searxng-admin-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -A4 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml" | grep -q 'group_add:'
 grep -q '/var/run/docker.sock:/var/run/docker.sock:rw' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'branding/favicon.svg:/usr/local/searxng/searx/static/themes/simple/img/favicon.svg:ro' "${repo_root}/fpk/app/docker/docker-compose.yaml"
+grep -q 'searxng/searxng:2026.7.15-7b2199ecd@sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q -- '--default-settings' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 
 echo "FPK lifecycle test passed"
