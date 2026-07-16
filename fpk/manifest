@@ -1,7 +1,7 @@
 appname=searxng
 version=@VERSION@
 display_name=SearXNG
-desc="SearXNG 搜索服务与飞牛原生配置管理界面"
+desc="<div style='text-align:center;'><img src='https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true' width='816' style='width:100%;max-width:816px;height:auto;border-radius:12px;' alt='SearXNG for fnOS' /></div><p><strong>SearXNG for fnOS</strong> 将隐私友好的开源元搜索引擎 SearXNG 打包为飞牛 fnOS 原生 FPK-Docker 应用。搜索服务使用官方 Docker 镜像，在同一页面聚合多个搜索来源，不建立用户画像，并保留完整的 SearXNG 原生界面与功能。</p><p><strong>主要功能</strong></p><ul><li>通过飞牛应用入口反复管理站点品牌、搜索行为、界面偏好、外发代理和完整搜索引擎目录。</li><li>当前镜像提供 346 个搜索引擎，默认启用常用国产搜索引擎与 Bing，并使用 Bing 搜索建议和 Google 网站图标解析。</li><li>支持上传 Wordmark、页面 Logo、PNG/SVG 浏览器图标和 PWA 图标，以及导入导出原始 settings.yml。</li><li>保存配置后自动重启 SearXNG 并执行健康检查；服务未恢复时自动回滚，避免错误配置导致长期不可用。</li><li>配置、品牌资源和备份持久化保存；卸载时可选择保留或彻底清除配置与应用数据。</li></ul><p><strong>访问方式：</strong>配置管理界面从飞牛应用卡片打开；搜索服务继续通过设备 IP 加端口 8080 访问。当前固定官方镜像版本为 2026.7.15-7b2199ecd。</p><p><strong>开源项目：</strong><a href='https://github.com/searxng/searxng' target='_blank' rel='noopener noreferrer'>SearXNG</a> · <a href='https://github.com/dqsq2e2/searxng-fpk' target='_blank' rel='noopener noreferrer'>SearXNG 飞牛 FPK</a></p>"
 platform=@PLATFORM@
 source=thirdparty
 maintainer=searxng

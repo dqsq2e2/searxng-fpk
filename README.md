@@ -1,6 +1,12 @@
 # SearXNG for fnOS
 
-将官方 `searxng/searxng` Docker 镜像打包为飞牛 fnOS FPK-Docker 应用，并提供独立的原生配置管理界面。
+<p align="center">
+  <img width="816" height="auto" src="https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true" alt="SearXNG for fnOS">
+</p>
+
+将隐私友好的开源元搜索引擎 SearXNG 打包为飞牛 fnOS 原生 FPK-Docker 应用。项目使用官方 `searxng/searxng` 多架构镜像，保留完整的 SearXNG 搜索界面，并额外提供可从飞牛应用卡片直接打开的配置管理 UI。
+
+用户无需手动编辑 YAML，即可管理完整搜索引擎目录、站点品牌、搜索行为、界面偏好、外发代理和品牌图片。配置保存后会自动应用并检查服务健康状态，失败时自动回滚；配置和应用数据支持持久化以及卸载时选择保留。
 
 ## 架构
 

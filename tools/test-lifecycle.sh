@@ -74,6 +74,8 @@ grep -q '^maintainer=searxng$' "${repo_root}/fpk/manifest"
 grep -q '^maintainer_url=https://github.com/searxng/searxng$' "${repo_root}/fpk/manifest"
 grep -q '^distributor=dqsq2e2$' "${repo_root}/fpk/manifest"
 grep -q '^distributor_url=https://github.com/dqsq2e2/searxng-fpk$' "${repo_root}/fpk/manifest"
+grep -q "poster.png?raw=true" "${repo_root}/fpk/manifest"
+grep -q '<strong>主要功能</strong>' "${repo_root}/fpk/manifest"
 grep -q 'container_name: searxng-admin-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -A4 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml" | grep -q 'group_add:'
