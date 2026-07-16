@@ -97,7 +97,7 @@ grep -q '^maintainer=searxng$' "${repo_root}/fpk/manifest"
 grep -q '^maintainer_url=https://github.com/searxng/searxng$' "${repo_root}/fpk/manifest"
 grep -q '^distributor=dqsq2e2$' "${repo_root}/fpk/manifest"
 grep -q '^distributor_url=https://github.com/dqsq2e2/searxng-fpk$' "${repo_root}/fpk/manifest"
-grep -q "poster.png?raw=true" "${repo_root}/fpk/manifest"
+grep -Fq 'https://gh-proxy.org/https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true' "${repo_root}/fpk/manifest"
 grep -q 'SearXNG是一个注重隐私的元搜索应用' "${repo_root}/fpk/manifest"
 manifest_desc="$(grep '^desc=' "${repo_root}/fpk/manifest")"
 case "${manifest_desc}" in
