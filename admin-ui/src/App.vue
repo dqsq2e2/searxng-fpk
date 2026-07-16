@@ -546,7 +546,6 @@ onMounted(loadAll)
   <main class="app-shell">
     <header class="topbar">
       <div class="brand-lockup">
-        <span class="brand-mark">S</span>
         <div><strong>SearXNG 配置</strong><small v-if="version">v{{ version }}</small></div>
       </div>
       <span class="status-pill" :class="connectionState"><i></i>{{ connectionText }}</span>

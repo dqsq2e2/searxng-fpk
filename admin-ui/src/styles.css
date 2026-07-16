@@ -25,7 +25,6 @@ button:disabled, input:disabled { cursor: not-allowed; opacity: .58; }
 .brand-lockup { display: flex; align-items: center; gap: 11px; }
 .brand-lockup > div { display: flex; align-items: baseline; gap: 8px; }
 .brand-lockup small { color: var(--muted); }
-.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(145deg, #0ca78e, #08705f); color: #fff; font-weight: 900; box-shadow: 0 7px 18px rgba(8, 127, 109, .22); }
 .status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #536360; font-size: 12px; font-weight: 700; }
 .status-pill i { width: 8px; height: 8px; border-radius: 50%; background: #dda42f; }
 .status-pill.connected i { background: #16956f; box-shadow: 0 0 0 4px rgba(22, 149, 111, .1); }
