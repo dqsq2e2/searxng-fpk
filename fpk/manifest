@@ -1,7 +1,7 @@
 appname=searxng
 version=@VERSION@
 display_name=SearXNG
-desc="""<p><img src='https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true' width='816' alt='SearXNG for fnOS'></p><p><strong>SearXNG for fnOS</strong> 是面向飞牛 fnOS 的 SearXNG 元搜索应用。它将多个搜索来源汇集到统一界面中，让你在自己的设备上获得简洁、开放且更注重隐私的搜索体验。</p><p><strong>功能亮点</strong></p><ul><li>聚合丰富的网页、图片、新闻、视频、学术和专业搜索来源。</li><li>内置完整搜索引擎目录，可按需要启用、停用或调整每个引擎。</li><li>提供飞牛原生配置管理界面，集中管理站点品牌、搜索偏好、界面选项和外发代理。</li><li>支持上传站点标识与浏览器图标，并可导入、导出和备份 SearXNG 配置。</li><li>保存配置后自动应用并检查服务状态，异常时自动回滚，降低错误配置带来的影响。</li><li>配置与品牌资源持久化保存，卸载时可自行选择保留或清除数据。</li></ul><p><strong>使用方式</strong></p><p>从飞牛桌面打开配置管理界面完成日常设置，搜索服务通过设备 IP 和安装时设置的端口访问。</p><p><strong>开源项目：</strong><a href='https://github.com/searxng/searxng'>SearXNG</a> · <a href='https://github.com/dqsq2e2/searxng-fpk'>SearXNG 飞牛 FPK</a></p>"""
+desc="""<p><img src='https://github.com/dqsq2e2/searxng-fpk/blob/main/poster.png?raw=true' width='816' alt='SearXNG for fnOS'></p><p>SearXNG是一个注重隐私的元搜索应用。它将多个搜索来源汇集到统一界面中，让你在自己的设备上获得简洁、开放且更注重隐私的搜索体验。</p>"""
 platform=@PLATFORM@
 source=thirdparty
 maintainer=searxng
