@@ -3,8 +3,25 @@
     "stepTitle": "安装 SearXNG",
     "items": [
       {
+        "type": "text",
+        "field": "wizard_service_port",
+        "label": "搜索服务端口",
+        "initValue": "8080",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入搜索服务端口"
+          },
+          {
+            "pattern": "^[0-9]+$",
+            "message": "端口只能包含数字"
+          }
+        ],
+        "helpText": "安装完成后通过设备 IP 和此端口访问 SearXNG，可填写 1 到 65535。"
+      },
+      {
         "type": "tips",
-        "helpText": "SearXNG 搜索服务将通过设备 IP 的 8080 端口访问。安装完成后，请从飞牛桌面打开“SearXNG 配置”管理全局设置。"
+        "helpText": "安装完成后，请从飞牛桌面打开“SearXNG 配置”管理全局设置；搜索页面仍通过设备 IP 加上方端口访问。"
       }
     ]
   }

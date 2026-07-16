@@ -16,6 +16,14 @@ fail() {
 [ -f "${TRIM_APPDEST}/branding/settings.yml" ] || fail "安装失败：应用配置模板未正确安装。"
 [ -f "${TRIM_APPDEST}/branding/default-engines.yml" ] || fail "安装失败：默认引擎配置未正确安装。"
 
+service_port="${wizard_service_port:-8080}"
+case "${service_port}" in
+  ''|*[!0-9]*) fail "安装失败：搜索服务端口必须为 1 到 65535 之间的数字。" ;;
+esac
+if [ "${service_port}" -lt 1 ] || [ "${service_port}" -gt 65535 ]; then
+  fail "安装失败：搜索服务端口必须位于 1 到 65535 之间。"
+fi
+
 mkdir -p "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng/cache" "${TRIM_PKGVAR}/backups" "${TRIM_PKGVAR}/logs" "${TRIM_PKGVAR}/control" || fail "安装失败：无法创建应用配置或数据目录。"
 chmod 755 "${TRIM_PKGETC}/searxng" "${TRIM_PKGETC}/searxng/branding" "${TRIM_PKGVAR}/searxng" "${TRIM_PKGVAR}/searxng/cache"
 chmod 770 "${TRIM_PKGVAR}/control"

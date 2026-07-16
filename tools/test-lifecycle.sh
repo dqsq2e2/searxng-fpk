@@ -9,6 +9,7 @@ export TRIM_APPDEST="${test_root}/target"
 export TRIM_PKGETC="${test_root}/protected/appconf/searxng"
 export TRIM_PKGVAR="${test_root}/protected/appdata/searxng"
 export TRIM_TEMP_LOGFILE="${test_root}/lifecycle-error.log"
+export wizard_service_port="18080"
 
 mkdir -p "${TRIM_APPDEST}" "${test_root}/protected/appconf" "${test_root}/protected/appdata"
 chmod 555 "${test_root}/protected/appconf" "${test_root}/protected/appdata"
@@ -21,6 +22,18 @@ test ! -e "${TRIM_PKGVAR}"
 cp -a "${repo_root}/fpk/app/." "${TRIM_APPDEST}/"
 chmod 755 "${test_root}/protected/appconf" "${test_root}/protected/appdata"
 mkdir -p "${TRIM_PKGETC}" "${TRIM_PKGVAR}"
+if wizard_service_port=0 "${repo_root}/fpk/cmd/install_callback" 2>/dev/null; then
+  echo "install callback accepted port 0" >&2
+  exit 1
+fi
+if wizard_service_port=65536 "${repo_root}/fpk/cmd/install_callback" 2>/dev/null; then
+  echo "install callback accepted port 65536" >&2
+  exit 1
+fi
+if wizard_service_port=invalid "${repo_root}/fpk/cmd/install_callback" 2>/dev/null; then
+  echo "install callback accepted a non-numeric port" >&2
+  exit 1
+fi
 "${repo_root}/fpk/cmd/install_callback"
 "${repo_root}/fpk/cmd/install_callback"
 
@@ -60,6 +73,12 @@ assert data_action["type"] == "radio"
 assert data_action["initValue"] == "keep"
 assert {option["value"] for option in data_action["options"]} == {"keep", "delete"}
 
+install = json.loads((root / "fpk/wizard/install").read_text(encoding="utf-8"))
+service_port = next(item for item in install[0]["items"] if item.get("field") == "wizard_service_port")
+assert service_port["type"] == "text"
+assert service_port["initValue"] == "8080"
+assert any(rule.get("pattern") == "^[0-9]+$" for rule in service_port["rules"])
+
 def png_size(relative):
     data = (root / relative).read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", relative
@@ -70,12 +89,28 @@ assert png_size("assets/icon_256.png") == (1024, 1024)
 PY
 
 grep -q '^checkport=false$' "${repo_root}/fpk/manifest"
+if grep -q '^service_port=' "${repo_root}/fpk/manifest"; then
+  echo "manifest must not declare a fixed service port" >&2
+  exit 1
+fi
 grep -q '^maintainer=searxng$' "${repo_root}/fpk/manifest"
 grep -q '^maintainer_url=https://github.com/searxng/searxng$' "${repo_root}/fpk/manifest"
 grep -q '^distributor=dqsq2e2$' "${repo_root}/fpk/manifest"
 grep -q '^distributor_url=https://github.com/dqsq2e2/searxng-fpk$' "${repo_root}/fpk/manifest"
 grep -q "poster.png?raw=true" "${repo_root}/fpk/manifest"
 grep -q '<strong>主要功能</strong>' "${repo_root}/fpk/manifest"
+manifest_desc="$(grep '^desc=' "${repo_root}/fpk/manifest")"
+case "${manifest_desc}" in
+  'desc="""'*'"""') ;;
+  *) echo "manifest HTML description must use triple quotes" >&2; exit 1 ;;
+esac
+case "${manifest_desc}" in
+  *';'*) echo "manifest description must not contain semicolons" >&2; exit 1 ;;
+esac
+if find "${repo_root}/fpk" -name '.gitkeep' -print -quit | grep -q .; then
+  echo "FPK template contains unnecessary .gitkeep files" >&2
+  exit 1
+fi
 grep -q 'container_name: searxng-admin-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -A4 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml" | grep -q 'group_add:'
@@ -83,6 +118,8 @@ grep -q '/var/run/docker.sock:/var/run/docker.sock:rw' "${repo_root}/fpk/app/doc
 grep -q 'branding/favicon.svg:/usr/local/searxng/searx/static/themes/simple/img/favicon.svg:ro' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'searxng/searxng:2026.7.15-7b2199ecd@sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q -- '--default-settings' "${repo_root}/fpk/app/docker/docker-compose.yaml"
+grep -Fq '${wizard_service_port:-8080}:8080' "${repo_root}/fpk/app/docker/docker-compose.yaml"
+grep -Fq '${wizard_service_port:-8080}' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 
 printf 'keep-config\n' > "${TRIM_PKGETC}/keep-marker"
 printf 'keep-data\n' > "${TRIM_PKGVAR}/keep-marker"

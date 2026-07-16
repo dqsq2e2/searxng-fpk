@@ -35,6 +35,7 @@ cp "${stage_dir}/app/ui/images/icon_256.png" "${stage_dir}/ICON_256.PNG"
 
 find "${stage_dir}/cmd" -type f -exec chmod 0755 {} +
 find "${stage_dir}" -name '.DS_Store' -delete
+find "${stage_dir}" -name '.gitkeep' -delete
 
 (cd "${stage_dir}" && "${fnpack_bin}" build)
 

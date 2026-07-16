@@ -4,7 +4,7 @@ services:
     container_name: searxng-fpk
     restart: unless-stopped
     ports:
-      - "${TRIM_SERVICE_PORT}:8080"
+      - "${wizard_service_port:-8080}:8080"
     volumes:
       - "${TRIM_PKGETC}/searxng/settings.yml:/etc/searxng/settings.yml:rw"
       - "${TRIM_PKGETC}/searxng/branding/searxng-wordmark.svg:/usr/local/searxng/searx/templates/simple/searxng-wordmark.min.svg:ro"
@@ -40,7 +40,7 @@ services:
       - --gateway-prefix
       - /app/searxng-admin
       - --service-port
-      - "${TRIM_SERVICE_PORT}"
+      - "${wizard_service_port:-8080}"
       - --settings
       - /config/settings.yml
       - --branding-dir

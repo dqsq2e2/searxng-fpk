@@ -13,7 +13,7 @@
 - 飞牛应用卡片打开 Vue 配置 UI。
 - Go 管理服务仅监听 Unix Socket，通过 fnOS 统一网关 `/app/searxng-admin/` 提供页面与 API。
 - 普通 `admin` 容器不挂载 Docker Socket；独立 `apply-controller` 仅接受本地 Unix Socket 的固定重启请求，避免配置 UI 进程直接拥有 Docker 管理权限。
-- SearXNG 搜索服务保持原生 `http://NAS_IP:8080` 访问方式。
+- SearXNG 搜索服务保持原生 `http://NAS_IP:安装端口` 访问方式，安装向导默认使用 `8080`。
 - 配置与品牌资源持久化到 fnOS 应用配置目录。
 - x86_64 与 ARM64 分别生成 FPK，容器均使用官方多架构镜像。
 
