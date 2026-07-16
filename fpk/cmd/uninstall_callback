@@ -1,3 +1,45 @@
 #!/bin/sh
 set -eu
+
+fail() {
+  message="$1"
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    printf '%s\n' "${message}" > "${TRIM_TEMP_LOGFILE}"
+  fi
+  printf '%s\n' "${message}" >&2
+  exit 1
+}
+
+remove_managed_directory() {
+  target="${1%/}"
+  expected_parent="$2"
+  [ -n "${target}" ] || fail "卸载失败：系统未提供需要清理的数据目录。"
+  case "${target}" in
+    /*) ;;
+    *) fail "卸载失败：拒绝清理非绝对路径 ${target}。" ;;
+  esac
+  [ "${target##*/}" = "searxng" ] || fail "卸载失败：拒绝清理非 SearXNG 目录 ${target}。"
+  parent="${target%/*}"
+  parent_name="${parent##*/}"
+  case "${parent_name}" in
+    "${expected_parent}"|"@${expected_parent}") ;;
+    *) fail "卸载失败：拒绝清理非托管目录 ${target}。" ;;
+  esac
+  rm -rf -- "${target}"
+}
+
+case "${wizard_data_action:-keep}" in
+  keep)
+    exit 0
+    ;;
+  delete)
+    remove_managed_directory "${TRIM_PKGETC:-}" "appconf"
+    remove_managed_directory "${TRIM_PKGVAR:-}" "appdata"
+    ;;
+  *)
+    printf '%s\n' "未知的数据处理选项 ${wizard_data_action}，为安全起见保留配置和应用数据。" >&2
+    exit 0
+    ;;
+esac
+
 exit 0

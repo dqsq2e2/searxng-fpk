@@ -54,6 +54,12 @@ for relative in (
 ):
     json.loads((root / relative).read_text(encoding="utf-8"))
 
+uninstall = json.loads((root / "fpk/wizard/uninstall").read_text(encoding="utf-8"))
+data_action = next(item for item in uninstall[0]["items"] if item.get("field") == "wizard_data_action")
+assert data_action["type"] == "radio"
+assert data_action["initValue"] == "keep"
+assert {option["value"] for option in data_action["options"]} == {"keep", "delete"}
+
 def png_size(relative):
     data = (root / relative).read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n", relative
@@ -75,5 +81,21 @@ grep -q '/var/run/docker.sock:/var/run/docker.sock:rw' "${repo_root}/fpk/app/doc
 grep -q 'branding/favicon.svg:/usr/local/searxng/searx/static/themes/simple/img/favicon.svg:ro' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q 'searxng/searxng:2026.7.15-7b2199ecd@sha256:268fdb05efbb7b4fdc5957a20c42389bfb1b1b27b5eddeb98f75ec80c45b960f' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q -- '--default-settings' "${repo_root}/fpk/app/docker/docker-compose.yaml"
+
+printf 'keep-config\n' > "${TRIM_PKGETC}/keep-marker"
+printf 'keep-data\n' > "${TRIM_PKGVAR}/keep-marker"
+wizard_data_action=keep "${repo_root}/fpk/cmd/uninstall_init"
+wizard_data_action=keep "${repo_root}/fpk/cmd/uninstall_callback"
+test -f "${TRIM_PKGETC}/keep-marker"
+test -f "${TRIM_PKGVAR}/keep-marker"
+
+wizard_data_action=unexpected "${repo_root}/fpk/cmd/uninstall_callback" 2>/dev/null
+test -f "${TRIM_PKGETC}/keep-marker"
+test -f "${TRIM_PKGVAR}/keep-marker"
+
+wizard_data_action=delete "${repo_root}/fpk/cmd/uninstall_init"
+wizard_data_action=delete "${repo_root}/fpk/cmd/uninstall_callback"
+test ! -e "${TRIM_PKGETC}"
+test ! -e "${TRIM_PKGVAR}"
 
 echo "FPK lifecycle test passed"

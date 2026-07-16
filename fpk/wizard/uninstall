@@ -1,10 +1,32 @@
 [
   {
-    "stepTitle": "卸载 SearXNG",
+    "stepTitle": "确认卸载 SearXNG",
     "items": [
       {
         "type": "tips",
-        "helpText": "卸载前请在 SearXNG 配置界面导出 settings.yml 和品牌资源备份。"
+        "helpText": "请选择卸载后如何处理 SearXNG 配置和应用数据。选择清除后，settings.yml、品牌图片、备份和缓存将被永久删除且无法恢复；建议先在配置界面导出 settings.yml 并备份品牌资源。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_data_action",
+        "label": "配置与应用数据",
+        "initValue": "keep",
+        "options": [
+          {
+            "label": "保留配置和应用数据（推荐）",
+            "value": "keep"
+          },
+          {
+            "label": "清除全部配置和应用数据（不可恢复）",
+            "value": "delete"
+          }
+        ],
+        "rules": [
+          {
+            "required": true,
+            "message": "请选择卸载后如何处理配置和应用数据"
+          }
+        ]
       }
     ]
   }
