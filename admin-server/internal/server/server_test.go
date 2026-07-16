@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	pngcodec "image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -267,7 +269,7 @@ func TestRawConfigImportPreservesCurrentSecret(t *testing.T) {
 
 func TestBrandingUploadValidation(t *testing.T) {
 	handler, _, brandingDir := newTestEnvironment(t, "/app/searxng-admin")
-	png := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, []byte("payload")...)
+	png := makeTestPNG(t, 640, 110)
 	validPNG := performAdminRequest(handler, http.MethodPost, "/api/branding/logo", png, "image/png")
 	if validPNG.Code != http.StatusOK {
 		t.Fatalf("PNG status = %d, body = %s", validPNG.Code, validPNG.Body.String())
@@ -279,6 +281,14 @@ func TestBrandingUploadValidation(t *testing.T) {
 	if invalidPNG.Code != http.StatusBadRequest {
 		t.Fatalf("invalid PNG status = %d", invalidPNG.Code)
 	}
+	wrongPWA := performAdminRequest(handler, http.MethodPost, "/api/branding/icon192", makeTestPNG(t, 256, 256), "image/png")
+	if wrongPWA.Code != http.StatusBadRequest || !strings.Contains(wrongPWA.Body.String(), "192 x 192") {
+		t.Fatalf("wrong PWA dimensions status = %d, body = %s", wrongPWA.Code, wrongPWA.Body.String())
+	}
+	validPWA := performAdminRequest(handler, http.MethodPost, "/api/branding/icon192", makeTestPNG(t, 192, 192), "image/png")
+	if validPWA.Code != http.StatusOK {
+		t.Fatalf("valid PWA status = %d, body = %s", validPWA.Code, validPWA.Body.String())
+	}
 	validSVG := performAdminRequest(handler, http.MethodPost, "/api/branding/wordmark", []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), "image/svg+xml")
 	if validSVG.Code != http.StatusOK {
 		t.Fatalf("SVG status = %d, body = %s", validSVG.Code, validSVG.Body.String())
@@ -287,6 +297,15 @@ func TestBrandingUploadValidation(t *testing.T) {
 	if wrongSVG.Code != http.StatusBadRequest {
 		t.Fatalf("invalid SVG status = %d", wrongSVG.Code)
 	}
+}
+
+func makeTestPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var output bytes.Buffer
+	if err := pngcodec.Encode(&output, image.NewNRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatalf("encode test PNG: %v", err)
+	}
+	return output.Bytes()
 }
 
 func newTestHandler(t *testing.T, prefix string) http.Handler {

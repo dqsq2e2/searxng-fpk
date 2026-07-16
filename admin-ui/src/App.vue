@@ -91,11 +91,12 @@ const sections: Array<{ key: SectionKey; label: string; hint: string }> = [
 ]
 
 const assetKinds = [
-  { kind: 'wordmark', label: 'Wordmark', accept: '.svg,.png,.webp' },
-  { kind: 'logo', label: 'Logo', accept: '.svg,.png,.webp' },
-  { kind: 'favicon', label: 'Favicon', accept: '.ico,.png,.svg' },
-  { kind: 'icon192', label: 'PWA 192', accept: '.png' },
-  { kind: 'icon512', label: 'PWA 512', accept: '.png' },
+  { kind: 'wordmark', label: '搜索页标志（Wordmark）', accept: '.svg', format: '仅 SVG', size: '推荐正方形画布', description: '内嵌显示在搜索结果页顶部，通常使用简洁的品牌符号。' },
+  { kind: 'logo', label: '页面 Logo', accept: '.png', format: '仅 PNG', size: '推荐 640 × 110', description: '显示在首页搜索区域及带页眉的页面中，建议使用透明背景横向图片。' },
+  { kind: 'favicon', label: '浏览器图标 PNG', accept: '.png', format: '仅 PNG', size: '建议至少 256 × 256', description: '用于书签、Apple Touch Icon、OpenSearch 及不支持 SVG 的浏览器。' },
+  { kind: 'faviconSvg', label: '浏览器图标 SVG', accept: '.svg', format: '仅 SVG', size: '推荐正方形画布', description: '现代浏览器和 PWA manifest 优先使用的矢量图标。' },
+  { kind: 'icon192', label: 'PWA 图标 192', accept: '.png', format: '仅 PNG', size: '必须 192 × 192', description: '用于添加到桌面和移动设备的标准 PWA 图标。' },
+  { kind: 'icon512', label: 'PWA 图标 512', accept: '.png', format: '仅 PNG', size: '必须 512 × 512', description: '用于高分辨率 PWA 启动画面和应用图标。' },
 ]
 
 const config = reactive<EditableConfig>(createDefaults())
@@ -623,10 +624,10 @@ onMounted(loadAll)
               </details>
             </article>
             <article class="panel form-panel">
-              <div class="panel-title"><div><h3>品牌资源</h3><p>上传后端会校验格式并保存到持久化目录。</p></div></div>
+              <div class="panel-title"><div><h3>品牌资源</h3><p>每个文件最大 2 MiB；上传后会校验真实格式、自动应用并持久化保存。</p></div></div>
               <div class="upload-grid">
                 <label v-for="asset in assetKinds" :key="asset.kind" class="upload-card" :class="{ busy: uploadBusy === asset.kind }">
-                  <span class="upload-icon">↑</span><b>{{ asset.label }}</b><small>{{ asset.accept.split(',').join(' · ') }}</small>
+                  <span class="upload-icon">↑</span><b>{{ asset.label }}</b><small class="asset-description">{{ asset.description }}</small><small class="asset-spec">{{ asset.format }} · {{ asset.size }}</small>
                   <input type="file" :accept="asset.accept" :disabled="uploadBusy !== ''" @change="uploadAsset(asset.kind, $event)">
                   <em>{{ uploadBusy === asset.kind ? '上传中…' : '选择文件' }}</em>
                 </label>

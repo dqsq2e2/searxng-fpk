@@ -6,6 +6,7 @@
 
 - 飞牛应用卡片打开 Vue 配置 UI。
 - Go 管理服务仅监听 Unix Socket，通过 fnOS 统一网关 `/app/searxng-admin/` 提供页面与 API。
+- 普通 `admin` 容器不挂载 Docker Socket；独立 `apply-controller` 仅接受本地 Unix Socket 的固定重启请求，避免配置 UI 进程直接拥有 Docker 管理权限。
 - SearXNG 搜索服务保持原生 `http://NAS_IP:8080` 访问方式。
 - 配置与品牌资源持久化到 fnOS 应用配置目录。
 - x86_64 与 ARM64 分别生成 FPK，容器均使用官方多架构镜像。
@@ -16,6 +17,7 @@
 - 默认启用国产搜索引擎与 Bing；`chinaso news` 因隐私风险保持锁定关闭。
 - 默认使用 Bing 搜索建议与 Google 网站图标解析器。
 - 支持上传 Logo/Favicon/PWA 图标，以及导入导出原始 `settings.yml`。
+- Wordmark 仅支持 SVG；页面 Logo 仅支持 PNG（推荐 640×110）；浏览器图标同时支持独立 PNG 与 SVG；PWA 图标必须分别为 192×192 和 512×512 PNG。
 - 引擎目录直接读取固定官方镜像的默认 `settings.yml`，当前版本展示全部 345 个默认引擎及自定义引擎。
 - 保存采用 revision 冲突检测、YAML 校验、备份和原子替换，并通过隔离控制器自动重启 SearXNG；健康失败时自动回滚。
 

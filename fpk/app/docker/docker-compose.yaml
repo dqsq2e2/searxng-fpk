@@ -10,6 +10,7 @@ services:
       - "${TRIM_PKGETC}/searxng/branding/searxng-wordmark.svg:/usr/local/searxng/searx/templates/simple/searxng-wordmark.min.svg:ro"
       - "${TRIM_PKGETC}/searxng/branding/searxng.png:/usr/local/searxng/searx/static/themes/simple/img/searxng.png:ro"
       - "${TRIM_PKGETC}/searxng/branding/favicon.png:/usr/local/searxng/searx/static/themes/simple/img/favicon.png:ro"
+      - "${TRIM_PKGETC}/searxng/branding/favicon.svg:/usr/local/searxng/searx/static/themes/simple/img/favicon.svg:ro"
       - "${TRIM_PKGETC}/searxng/branding/192.png:/usr/local/searxng/searx/static/themes/simple/img/192.png:ro"
       - "${TRIM_PKGETC}/searxng/branding/512.png:/usr/local/searxng/searx/static/themes/simple/img/512.png:ro"
       - "${TRIM_PKGVAR}/searxng/cache:/var/cache/searxng:rw"

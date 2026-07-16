@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"image/png"
 	"io"
 	"mime"
 	"net/http"
@@ -16,16 +17,19 @@ import (
 const maxBrandingAsset = 2 << 20
 
 type brandingAsset struct {
-	Filename string
-	Kind     string
+	Filename    string
+	Kind        string
+	ExactWidth  int
+	ExactHeight int
 }
 
 var brandingAssets = map[string]brandingAsset{
-	"wordmark": {Filename: "searxng-wordmark.svg", Kind: "svg"},
-	"logo":     {Filename: "searxng.png", Kind: "png"},
-	"favicon":  {Filename: "favicon.png", Kind: "png"},
-	"icon192":  {Filename: "192.png", Kind: "png"},
-	"icon512":  {Filename: "512.png", Kind: "png"},
+	"wordmark":   {Filename: "searxng-wordmark.svg", Kind: "svg"},
+	"logo":       {Filename: "searxng.png", Kind: "png"},
+	"favicon":    {Filename: "favicon.png", Kind: "png"},
+	"faviconSvg": {Filename: "favicon.svg", Kind: "svg"},
+	"icon192":    {Filename: "192.png", Kind: "png", ExactWidth: 192, ExactHeight: 192},
+	"icon512":    {Filename: "512.png", Kind: "png", ExactWidth: 512, ExactHeight: 512},
 }
 
 func (handler *Handler) serveBranding(response http.ResponseWriter, request *http.Request, assetName string) {
@@ -49,7 +53,7 @@ func (handler *Handler) serveBranding(response http.ResponseWriter, request *htt
 		writeJSON(response, status, map[string]string{"error": err.Error()})
 		return
 	}
-	if err := validateAsset(asset.Kind, data); err != nil {
+	if err := validateAsset(asset, data); err != nil {
 		writeJSON(response, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -113,11 +117,18 @@ func readLimited(reader io.Reader, maximum int64) ([]byte, error) {
 	return data, nil
 }
 
-func validateAsset(kind string, data []byte) error {
-	switch kind {
+func validateAsset(asset brandingAsset, data []byte) error {
+	switch asset.Kind {
 	case "png":
 		if !bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}) {
 			return errors.New("asset must be a PNG file")
+		}
+		image, err := png.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			return errors.New("asset must be a valid PNG file")
+		}
+		if asset.ExactWidth > 0 && (image.Width != asset.ExactWidth || image.Height != asset.ExactHeight) {
+			return fmt.Errorf("asset must be exactly %d x %d pixels", asset.ExactWidth, asset.ExactHeight)
 		}
 	case "svg":
 		decoder := xml.NewDecoder(bytes.NewReader(data))

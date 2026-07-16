@@ -70,7 +70,7 @@ if ! grep -Eq '^engines:[[:space:]]*$' "${TRIM_PKGETC}/searxng/settings.yml"; th
   cat "${TRIM_APPDEST}/branding/default-engines.yml" >> "${TRIM_PKGETC}/searxng/settings.yml"
 fi
 
-for asset in searxng.png favicon.png 192.png 512.png searxng-wordmark.svg; do
+for asset in searxng.png favicon.png favicon.svg 192.png 512.png searxng-wordmark.svg; do
   source_file="${TRIM_APPDEST}/branding/${asset}"
   target_file="${TRIM_PKGETC}/searxng/branding/${asset}"
   [ -f "${source_file}" ] || fail "安装失败：缺少品牌资源 ${asset}。"

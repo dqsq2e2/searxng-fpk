@@ -4,6 +4,11 @@ set -eu
 settings_file="${TRIM_PKGETC}/searxng/settings.yml"
 mkdir -p "${TRIM_PKGVAR}/control"
 chmod 770 "${TRIM_PKGVAR}/control"
+mkdir -p "${TRIM_PKGETC}/searxng/branding"
+if [ ! -f "${TRIM_PKGETC}/searxng/branding/favicon.svg" ] && [ -f "${TRIM_APPDEST}/branding/favicon.svg" ]; then
+  cp "${TRIM_APPDEST}/branding/favicon.svg" "${TRIM_PKGETC}/searxng/branding/favicon.svg"
+  chmod 644 "${TRIM_PKGETC}/searxng/branding/favicon.svg"
+fi
 if [ ! -f "${settings_file}" ]; then
   exit 0
 fi

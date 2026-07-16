@@ -26,6 +26,7 @@ mkdir -p "${TRIM_PKGETC}" "${TRIM_PKGVAR}"
 
 test -f "${TRIM_PKGETC}/searxng/settings.yml"
 test -f "${TRIM_PKGETC}/searxng/branding/searxng.png"
+test -f "${TRIM_PKGETC}/searxng/branding/favicon.svg"
 test -d "${TRIM_PKGVAR}/control"
 grep -q 'favicon_resolver: "google"' "${TRIM_PKGETC}/searxng/settings.yml"
 grep -q 'autocomplete: "bing"' "${TRIM_PKGETC}/searxng/settings.yml"
@@ -58,6 +59,7 @@ grep -q 'container_name: searxng-admin-fpk' "${repo_root}/fpk/app/docker/docker-
 grep -q 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -A4 'container_name: searxng-apply-fpk' "${repo_root}/fpk/app/docker/docker-compose.yaml" | grep -q 'group_add:'
 grep -q '/var/run/docker.sock:/var/run/docker.sock:rw' "${repo_root}/fpk/app/docker/docker-compose.yaml"
+grep -q 'branding/favicon.svg:/usr/local/searxng/searx/static/themes/simple/img/favicon.svg:ro' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 grep -q -- '--default-settings' "${repo_root}/fpk/app/docker/docker-compose.yaml"
 
 echo "FPK lifecycle test passed"
